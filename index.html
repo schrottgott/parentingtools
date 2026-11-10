@@ -1,1 +1,1396 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="theme-color" content="#f6eee7">
+  <title>Still-Tracker</title>
+  <!--
+    ============================================================
+    Still-Tracker · Version 18 (Speicher-Optimierung)
+    Erstellt / weiterentwickelt: 10.11.2026
+    Bearbeitet von: Lumo (Proton) im Auftrag der Nutzerin/des Nutzers
+    Neu in v18:
+    - Sofortiges Speichern bei jeder Änderung (kein 200-ms-Debounce mehr)
+    - Speichern zusätzlich beim Verbergen/Schließen der Seite/App
+    - Deutliche Warnung, falls der Browser-Speicher verweigert wird
+      (z. B. Privatmodus oder Speicher voll) statt stillem Datenverlust
+    ============================================================
+  -->
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6eee7;
+      --card: #fffaf6;
+      --ink: #342a27;
+      --muted: #796b65;
+      --line: #eaded5;
+      --left: #bd6553;
+      --left-bg: #f9ede9;
+      --right: #d9b989;
+      --right-strong: #cfa75f;
+      --right-ink: #5f4c22;
+      --right-bg: #faf3e7;
+      --accent: #9d7650;
+    }
 
+    * { box-sizing: border-box; }
+    [hidden] { display: none !important; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    #saveWarning {
+      display: none;
+      margin: 0;
+      padding: 12px 16px;
+      background: #ffe1db;
+      color: #8b1f0e;
+      font-size: .85rem;
+      line-height: 1.5;
+      border-bottom: 2px solid #d95f49;
+    }
+
+    main { width: min(100%, 560px); margin: 0 auto; padding: 26px 18px 38px; }
+    header { margin-bottom: 18px; text-align: center; }
+    h1 { margin: 0 0 16px; font-size: 1.6rem; }
+    .muted { color: var(--muted); }
+
+    .card {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 21px;
+      background: var(--card);
+      box-shadow: 0 8px 24px #4a30200a;
+    }
+
+    button, select, input { font: inherit; }
+    button { cursor: pointer; touch-action: manipulation; }
+    button:disabled { cursor: not-allowed; opacity: .55; }
+
+    .controls { display: flex; gap: 8px; }
+
+    .live-timer {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      margin-bottom: 14px;
+      padding: 12px;
+      border-radius: 13px;
+      background: #f7eee7;
+      border: 1px solid var(--line);
+    }
+
+    .live-timer.recording {
+      background: var(--left-bg);
+      border-color: #e8cbc3;
+    }
+
+    .live-status {
+      color: var(--muted);
+      font-size: .78rem;
+      letter-spacing: .04em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .live-time {
+      font-size: 2rem;
+      font-weight: 750;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.1;
+    }
+
+    .side-btn {
+      min-height: 50px;
+      flex: 1;
+      border: 2px solid transparent;
+      border-radius: 12px;
+      font-weight: 700;
+      opacity: .55;
+    }
+
+    .side-btn.left { background: var(--left); color: white; }
+    .side-btn.right { background: var(--right); color: var(--right-ink); }
+    .side-btn.selected { opacity: 1; border-color: var(--ink); }
+
+    .big-toggle {
+      width: 100%;
+      min-height: 62px;
+      margin-top: 14px;
+      border: 0;
+      border-radius: 15px;
+      background: var(--left);
+      color: white;
+      font-weight: 700;
+      font-size: 1.15rem;
+    }
+
+    .big-toggle.running { background: #8b3e31; }
+
+    .last-feed {
+      margin-top: 14px;
+      padding: 12px 14px;
+      border-radius: 13px;
+      box-shadow: 0 6px 18px #4a302033;
+      font-size: .9rem;
+      line-height: 1.55;
+      text-align: center;
+    }
+
+    .last-feed.side-left { background: var(--left); color: white; }
+    .last-feed.side-right { background: var(--right-strong); color: #3f3212; }
+
+    .last-feed strong { font-size: .98rem; display: block; margin-bottom: 2px; }
+
+    .hint { min-height: 1.35em; margin: 12px 0 0; color: var(--muted); font-size: .86rem; }
+
+    .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    .stat { padding: 11px 6px; border-radius: 13px; }
+    .stat.stat-left { background: var(--left-bg); border: 1px solid #e8cbc3; }
+    .stat.stat-right { background: var(--right-bg); border: 1px solid #e8dcc4; }
+    .stat.stat-total { background: #f7eee7; border: 1px solid var(--line); grid-column: 1 / -1; }
+    .stat span { display: block; color: var(--muted); font-size: .74rem; }
+    .stat strong { display: block; margin-top: 4px; font-size: 1rem; font-variant-numeric: tabular-nums; }
+
+    h2 { margin: 24px 0 11px; font-size: 1.15rem; }
+
+    .graph-wrap {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fffdfb;
+      overflow: hidden;
+      cursor: pointer;
+    }
+
+    canvas { display: block; width: 100%; height: 140px; touch-action: pan-y; }
+
+    .legend { display: flex; gap: 12px; margin-top: 8px; color: var(--muted); font-size: .84rem; }
+    .dot { display: inline-block; width: 10px; height: 10px; margin-right: 5px; border-radius: 50%; }
+
+    .timeline-controls { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .span-group { display: flex; flex: 1 1 100%; gap: 7px; }
+
+    .span-button, .nav-button {
+      min-height: 42px;
+      padding: 5px 12px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: white;
+      color: var(--ink);
+      font-size: .86rem;
+    }
+
+    .span-group .span-button { flex: 1; }
+    .span-button.active { background: var(--accent); border-color: var(--accent); color: white; }
+    .nav-button.wide { flex: 1; }
+
+    .graph-status { margin: 9px 0 0; color: var(--muted); font-size: .79rem; min-height: 1.2em; }
+
+    .tap-detail {
+      margin: 10px 2px 2px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      box-shadow: 0 6px 18px #4a302033;
+      font-size: .88rem;
+      line-height: 1.5;
+    }
+
+    .tap-detail.side-left { background: var(--left); color: white; }
+    .tap-detail.side-right { background: var(--right-strong); color: #3f3212; }
+    .tap-detail .tap-title { font-weight: 700; font-size: .97rem; }
+
+    .tap-detail .tap-close {
+      float: right;
+      margin: -3px -4px 0 8px;
+      padding: 2px 9px;
+      border: 0;
+      border-radius: 8px;
+      background: rgba(255,255,255,.25);
+      color: inherit;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+
+    details > summary { padding: 4px 0; cursor: pointer; font-weight: 650; }
+    .list { display: grid; gap: 9px; margin-top: 13px; }
+
+    .feed-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: #fffdfb;
+    }
+
+    .feed-row.side-left { border-color: #e8cbc3; background: var(--left-bg); }
+    .feed-row.side-right { border-color: #e8dcc4; background: var(--right-bg); }
+
+    .side-badge {
+      display: inline-block;
+      min-width: 22px;
+      padding: 1px 7px;
+      margin-right: 8px;
+      border-radius: 8px;
+      font-size: .74rem;
+      font-weight: 700;
+    }
+
+    .side-left .side-badge { background: var(--left); color: white; }
+    .side-right .side-badge { background: var(--right-strong); color: #3f3212; }
+
+    .feed-info { min-width: 0; }
+    .feed-title { font-weight: 650; }
+    .feed-detail { margin-top: 3px; color: var(--muted); font-size: .82rem; }
+
+    .delete-button, .history-button {
+      flex: 0 0 auto;
+      min-height: 38px;
+      padding: 6px 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: white;
+      color: var(--ink);
+      font-size: .84rem;
+    }
+
+    .empty { padding: 12px 0; color: var(--muted); text-align: center; font-size: .9rem; }
+    .note { margin: 18px 2px 0; color: var(--muted); font-size: .79rem; line-height: 1.5; }
+
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .setting-row p { margin: 0; font-size: .92rem; }
+
+    .setting-row select {
+      min-height: 42px;
+      padding: 4px 10px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
+      background: white;
+      color: var(--ink);
+    }
+
+    .action-button {
+      width: 100%;
+      min-height: 50px;
+      margin-top: 12px;
+      border: 1px solid #d8b8ae;
+      border-radius: 14px;
+      background: #fff5f2;
+      color: #8b3e31;
+      font-weight: 650;
+    }
+
+    .action-button.secondary { border-color: var(--line); background: white; color: var(--ink); }
+    .backup-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+
+    dialog {
+      width: min(100%, 520px);
+      max-height: 80vh;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: var(--card);
+      color: var(--ink);
+    }
+
+    dialog::backdrop { background: #342a2788; }
+
+    .help-head {
+      position: sticky;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 18px 12px;
+      background: var(--card);
+      border-bottom: 1px solid var(--line);
+    }
+
+    .help-head h3 { margin: 0; font-size: 1.1rem; }
+
+    .help-close {
+      min-height: 38px;
+      padding: 4px 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: white;
+      color: var(--ink);
+    }
+
+    .help-body { padding: 14px 18px 20px; font-size: .9rem; line-height: 1.55; }
+    .help-body h4 { margin: 16px 0 6px; font-size: .95rem; }
+    .help-body h4:first-child { margin-top: 0; }
+    .help-body p { margin: 4px 0 10px; }
+    .help-body ul { margin: 4px 0 10px; padding-left: 20px; }
+    .help-body li { margin: 3px 0; }
+
+    @media (max-width: 360px) {
+      main { padding-right: 12px; padding-left: 12px; }
+      .card { padding: 16px 13px; }
+      .stat span { font-size: .68rem; }
+      .stat strong { font-size: .88rem; }
+    }
+  </style>
+</head>
+<body>
+  <div id="saveWarning" role="alert"></div>
+
+  <main>
+    <header>
+      <h1>Still-Tracker</h1>
+    </header>
+
+    <div class="viewing-banner" id="viewingBanner" hidden></div>
+
+    <section class="card" aria-live="polite">
+
+      <div class="live-timer" id="liveTimer" hidden>
+        <span class="live-status" id="liveStatus"></span>
+        <span class="live-time" id="liveTime">00:00</span>
+      </div>
+
+      <div class="controls">
+        <button class="side-btn left" id="sideLeft" type="button">◀ Links</button>
+        <button class="side-btn right" id="sideRight" type="button">Rechts ▶</button>
+      </div>
+
+      <button class="big-toggle" id="bigToggle" type="button">Stillzeit starten</button>
+      <div class="last-feed" id="lastFeed" hidden></div>
+      <p class="hint" id="feedHint"></p>
+    </section>
+
+    <h2>Zeitstrahl</h2>
+    <section class="card">
+      <div class="graph-wrap" id="graphWrap">
+        <canvas id="feedGraph" aria-label="Zeitstrahl der Stillzeiten"></canvas>
+      </div>
+      <div class="legend">
+        <span><i class="dot" style="background:var(--left)"></i>Links (oben)</span>
+        <span><i class="dot" style="background:var(--right-strong)"></i>Rechts (unten)</span>
+      </div>
+      <div id="tapDetailHost"></div>
+      <div class="timeline-controls">
+        <div class="span-group">
+          <button class="span-button" data-span="1" type="button">1 Std</button>
+          <button class="span-button" data-span="3" type="button">3 Std</button>
+          <button class="span-button active" data-span="12" type="button">12 Std</button>
+          <button class="span-button" data-span="24" type="button">24 Std</button>
+          <button class="span-button" data-span="72" type="button">3 T</button>
+          <button class="span-button" data-span="168" type="button">7 T</button>
+        </div>
+        <button class="nav-button" id="zoomOut" type="button" aria-label="Herauszoomen">−</button>
+        <button class="nav-button wide" id="jumpNow" type="button">Jetzt</button>
+        <button class="nav-button" id="zoomIn" type="button" aria-label="Hineinzoomen">+</button>
+        <button class="nav-button" id="panBack" type="button">◀ zurück</button>
+        <button class="nav-button" id="panForward" type="button">vor ▶</button>
+      </div>
+      <p class="graph-status" id="graphStatus"></p>
+    </section>
+
+    <h2>Statistik</h2>
+    <section class="card">
+      <div class="stats" id="statsBox"></div>
+    </section>
+
+
+    <h2>Einstellungen</h2>
+    <section class="card">
+      <div class="setting-row">
+        <p>Nach dem Stillen die Seite …</p>
+        <select id="autoSwitch">
+          <option value="on">automatisch wechseln</option>
+          <option value="off">nicht ändern</option>
+        </select>
+      </div>
+    </section>
+
+
+    <h2>Stillzeiten</h2>
+    <section class="card">
+      <details id="feedDetails">
+        <summary id="feedSummary">Einträge anzeigen</summary>
+        <div class="list" id="feedList"></div>
+      </details>
+    </section>
+
+    <h2>Messreihen</h2>
+    <section class="card">
+      <details id="historyDetails">
+        <summary id="historySummary">Gespeicherte Reihen anzeigen</summary>
+        <div class="list" id="historyList"></div>
+      </details>
+    </section>
+
+    <button class="action-button" id="finishSeries" type="button">Messreihe beenden</button>
+    <button class="action-button" id="newSeries" type="button">Neue Messreihe starten</button>
+
+    <h2>Sicherung &amp; Daten</h2>
+    <section class="card">
+      <p class="muted" style="margin:0 0 12px;font-size:.86rem">
+        Die Daten werden dauerhaft im Browser-Speicher dieses Geräts gespeichert.
+        Erstelle regelmäßig eine Sicherungsdatei und lies sie bei einem Wechsel wieder ein.
+      </p>
+      <div class="backup-controls">
+        <button class="action-button secondary" id="exportData" type="button" style="margin-top:0">Sicherung exportieren</button>
+        <button class="action-button secondary" id="importData" type="button" style="margin-top:0">Sicherung importieren</button>
+      </div>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </section>
+
+    <button class="action-button secondary" id="helpButton" type="button">ℹ️ Anleitung &amp; Hilfe</button>
+
+    <p class="note">
+      Die Daten werden bei jeder Änderung sofort dauerhaft im Browser-Speicher gespeichert
+      und sind auch nach dem Schließen von App oder Browser vollständig erhalten. Sie können
+      dennoch durch das Löschen der Browserdaten oder im privaten Modus verloren gehen;
+      nutze deshalb zusätzlich den Export. Der Tracker dient der Zeitmessung und ersetzt
+      keine medizinische Einschätzung.
+    </p>
+  </main>
+
+  <dialog id="helpDialog">
+    <div class="help-head">
+      <h3>Anleitung</h3>
+      <button class="help-close" id="helpClose" type="button">Schließen</button>
+    </div>
+    <div class="help-body">
+      <h4>Stillzeit aufzeichnen</h4>
+      <ul>
+        <li><strong>Seite wählen:</strong> Tippe auf „Links" oder „Rechts" – die markierte Seite gilt für die Aufzeichnung.</li>
+        <li><strong>Starten / Beenden:</strong> Der große Button startet und beendet die Stillzeit. Ein laufender Timer zeigt die bisherige Dauer.</li>
+        <li><strong>Seitenwechsel mitten im Stillen:</strong> Wählst du während einer laufenden Aufzeichnung die andere Seite, wird der Eintrag an dieser Stelle beendet und sofort auf der neuen Seite weitergemessen – es geht keine Zeit verloren.</li>
+        <li><strong>Einstellung „Nach dem Stillen die Seite …":</strong> Mit „automatisch wechseln" stellt der Tracker nach Beenden einer Stillzeit automatisch die andere Seite ein; mit „nicht ändern" bleibt die gewählte Seite stehen.</li>
+      </ul>
+
+      <h4>Letzte Stillzeit</h4>
+      <p>Unter dem Start-Button siehst du die zuletzt beendete Stillzeit: Seite, Tag, Uhrzeit und Dauer.</p>
+
+      <h4>Zeitstrahl</h4>
+      <ul>
+        <li>Die Zeitraum-Buttons (1 Std bis 7 Tage) legen das Fenster fest, − / + zoomen darüber hinaus.</li>
+        <li>„◀ zurück" / „vor ▶" blättern in der Vergangenheit, „Jetzt" springt zur aktuellen Zeit.</li>
+        <li>Einen Balken antippen zeigt Details zur Stillzeit. Der Zeitstrahl läuft live mit, auch während des Stillens.</li>
+        <li>Der Zoom- und Blickzustand wird pro Messreihe gemerkt und beim erneuten Öffnen wiederhergestellt.</li>
+      </ul>
+
+      <h4>Statistik</h4>
+      <p>Zeigt für heute die Stillzeiten links und rechts sowie eine Gesamtbilanz.</p>
+
+      <h4>Messreihen</h4>
+      <ul>
+        <li>Das Schließen des Browsers oder der Seite beendet <strong>keine</strong> Messreihe – beim nächsten Öffnen wird die aktuelle Reihe automatisch fortgeführt, auch eine laufende Stillzeit läuft weiter.</li>
+        <li>Jede gespeicherte Reihe lässt sich über „Öffnen" ansehen und wird dabei sofort wieder zur aktuellen Messreihe – egal ob sie vorher beendet wurde oder nicht. Direkt danach kann in ihr weitergemessen werden.</li>
+        <li>„Messreihe beenden" schließt die aktuelle Aufzeichnung ab; sie bleibt in der Historie.</li>
+        <li>„Neue Messreihe starten" beginnt eine frische Aufzeichnung; alte Reihen bleiben erhalten.</li>
+        <li><strong>Speichern:</strong> Jede Änderung wird sofort gespeichert – zusätzlich auch beim Verbergen oder Schließen der Seite/App. Falls das Speichern verweigert wird (z. B. Privatmodus), erscheint oben eine deutliche Warnung.</li>
+      </ul>
+
+      <h4>Sicherung</h4>
+      <p>Mit „Sicherung exportieren" speicherst du alle Daten als JSON-Datei, mit „Sicherung importieren" stellst du sie wieder her (überschreibt die aktuellen Daten).</p>
+    </div>
+  </dialog>
+
+  <script>
+    (() => {
+      "use strict";
+
+      const STORAGE_KEY = "still-tracker-data-v3";
+      const LEGACY_KEYS = ["still-tracker-data-v2", "still-tracker-data-v1"];
+      const $ = id => document.getElementById(id);
+      const HOUR = 60 * 60 * 1000;
+
+      /* ============ Zustand ============ */
+
+      let currentSide = "left"; // Seite, die als nächstes gestartet wird
+      let series = [];
+      let currentId = null;
+      let selectedId = null;
+      let autoSwitch = "on";
+
+      let viewSpanHours = 12;
+      let viewRight = null;
+      let zoomSpanHours = null;
+
+      let tapTargets = [];
+      let openDetail = null;
+
+      function showSaveWarning(detail) {
+        const box = $("saveWarning");
+        box.style.display = "block";
+        box.textContent =
+          "Wichtig: Die Daten konnten NICHT dauerhaft gespeichert werden" +
+          (detail ? " (" + detail + ")" : "") +
+          ". Dies kann im privaten/incognito Modus oder bei vollem Speicher passieren. " +
+          "Neue Stillzeiten würden beim Schließen verloren gehen – bitte exportiere deine " +
+          "Daten über „Sicherung exportieren“ und nutze ggf. einen normalen (nicht privaten) Browsermodus.";
+      }
+
+      function persistState() {
+        // Ansichtszustand der aktuellen Reihe mitspeichern
+        try {
+          const session = activeSeries();
+          if (session) {
+            session.view = {
+              span: viewSpanHours,
+              zoom: zoomSpanHours,
+              // Position relativ zur Jetzt-Zeit merken, damit sie beim späteren
+              // Öffnen noch Sinn ergibt
+              rightAgo: viewRight === null ? null : Date.now() - viewRight
+            };
+          }
+          localStorage.setItem(STORAGE_KEY, JSON.stringify({
+            currentSide, series, currentId, autoSwitch
+          }));
+        } catch (error) {
+          showSaveWarning(error && error.name ? error.name : "unbekannter Fehler");
+        }
+      }
+
+      // v18: Sofortiges Speichern bei JEDER Änderung (kein Debounce mehr),
+      // damit selbst das plötzliche Schließen von App/Browser nichts verliert.
+      // Zusätzlich sichert der untenstehende Ereignis-Block beim Verbergen
+      // oder Schließen der Seite nochmals explizit.
+      function scheduleSave() {
+        persistState();
+      }
+
+      function makeId() {
+        return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+      }
+
+      function makeSeries() {
+        return { id: makeId(), startedAt: Date.now(), endedAt: null, finished: false, entries: [], view: null };
+      }
+
+      function activeSeries() { return series.find(s => s.id === currentId) || null; }
+      function selectedSeries() { return series.find(s => s.id === selectedId) || activeSeries(); }
+      function isCurrentView() { return selectedId === currentId; }
+      function entries(s) { return s ? s.entries || [] : []; }
+      function activeFeed() {
+        return entries(activeSeries()).find(e => e.end === null) || null;
+      }
+
+      // Ansichtszustand einer Reihe anwenden (Zoom + Buttons synchronisieren)
+      function applyViewState(session) {
+        const v = session?.view;
+        if (v && Number.isFinite(v.span) && v.span > 0) {
+          viewSpanHours = v.span;
+          zoomSpanHours = Number.isFinite(v.zoom) && v.zoom > 0 ? v.zoom : null;
+          viewRight = v.rightAgo === null || !Number.isFinite(v.rightAgo)
+            ? null
+            : Math.max(0, Date.now() - v.rightAgo);
+        } else {
+          viewSpanHours = 12;
+          zoomSpanHours = null;
+          viewRight = null;
+        }
+        syncSpanButtons();
+      }
+
+      function syncSpanButtons() {
+        const matched = zoomSpanHours === null;
+        document.querySelectorAll(".span-button").forEach(b => {
+          b.classList.toggle("active", matched && Number(b.dataset.span) === viewSpanHours);
+        });
+      }
+
+      /* ============ Formatierung ============ */
+
+      function fmt(ms) {
+        if (!Number.isFinite(ms) || ms < 0) return "—";
+        const sec = Math.floor(ms / 1000);
+        return `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
+      }
+
+      function timeOfDay(ts) {
+        return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      }
+
+      function dayLabel(ts) {
+        return new Date(ts).toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+      }
+
+      function dateTime(ts) {
+        return new Date(ts).toLocaleString([], {
+          year: "numeric", month: "short", day: "numeric",
+          hour: "2-digit", minute: "2-digit"
+        });
+      }
+
+      function agoText(ts, now) {
+        const minutes = Math.max(0, Math.round((now - ts) / 60000));
+        if (minutes < 1) return "gerade eben";
+        if (minutes < 60) return `vor ${minutes} Min.`;
+        const hours = Math.floor(minutes / 60);
+        const rest = minutes % 60;
+        if (hours < 24) return rest ? `vor ${hours} Std. ${rest} Min.` : `vor ${hours} Std.`;
+        const days = Math.floor(hours / 24);
+        return `vor ${days} Tag${days === 1 ? "" : "en"}`;
+      }
+
+      function isSameDay(a, b) {
+        const da = new Date(a), db = new Date(b);
+        return da.getFullYear() === db.getFullYear() &&
+               da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
+      }
+
+      /* ============ Laden & Migration ============ */
+
+      function sanitizeEntry(e) {
+        if (!e || (e.side !== "left" && e.side !== "right")) return null;
+        if (!Number.isFinite(e.start)) return null;
+        if (e.end !== null && !Number.isFinite(e.end)) return null;
+        return { side: e.side, start: e.start, end: e.end };
+      }
+
+      function normalizeSessions(rawSessions, currentIdRaw) {
+        const sessions = (rawSessions || [])
+          .filter(s => s && typeof s.id === "string")
+          .map(s => ({
+            id: s.id,
+            startedAt: Number.isFinite(s.startedAt) ? s.startedAt : Date.now(),
+            endedAt: Number.isFinite(s.endedAt) ? s.endedAt : null,
+            finished: Boolean(s.finished),
+            view: s.view || null,
+            entries: (Array.isArray(s.entries) ? s.entries : []).map(sanitizeEntry).filter(Boolean)
+          }));
+        let current = currentIdRaw;
+        if (!sessions.some(s => s.id === current)) current = null;
+        return { sessions, current };
+      }
+
+      function loadAll() {
+        let data = null;
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (raw) data = JSON.parse(raw);
+        } catch { data = null; }
+
+        // Migration von älteren Versionen (Mehrlinge / Original):
+        // Einträge werden ohne Kindzuordnung übernommen.
+        if (!data || !Array.isArray(data.series)) {
+          for (const key of LEGACY_KEYS) {
+            try {
+              const legacy = JSON.parse(localStorage.getItem(key) || "null");
+              if (legacy && Array.isArray(legacy.series)) {
+                const first = legacy.series[0];
+                const migrated = first?.entries?.map(e => sanitizeEntry({
+                  side: e.side, start: e.start, end: e.end
+                })).filter(Boolean) || [];
+                data = {
+                  series: [{ id: makeId(), startedAt: Date.now(), endedAt: null, finished: false, entries: [], view: null }],
+                  currentId: null
+                };
+                data.series[0].entries = migrated;
+                if (legacy.currentSide) currentSide = legacy.currentSide;
+                if (legacy.autoSwitch === "off") autoSwitch = "off";
+                if (Array.isArray(legacy.series) && legacy.series.length > 1) {
+                  // Weitere Reihen ebenfalls flach übernehmen
+                  for (let i = 1; i < legacy.series.length; i++) {
+                    const s = legacy.series[i];
+                    data.series.push({
+                      id: makeId(),
+                      startedAt: Number.isFinite(s.startedAt) ? s.startedAt : Date.now(),
+                      endedAt: Number.isFinite(s.endedAt) ? s.endedAt : null,
+                      finished: Boolean(s.finished),
+                      view: null,
+                      entries: (s.entries || []).map(e => sanitizeEntry({
+                        side: e.side ?? e.entries?.[0]?.side, start: e.start, end: e.end
+                      })).filter(Boolean)
+                    });
+                  }
+                }
+                break;
+              }
+            } catch { /* weiter mit nächstem Schlüssel */ }
+          }
+        }
+
+        if (data && Array.isArray(data.series)) {
+          if (data.currentSide === "left" || data.currentSide === "right") {
+            currentSide = data.currentSide;
+          }
+          if (data.autoSwitch === "off") autoSwitch = "off";
+          const norm = normalizeSessions(data.series, data.currentId);
+          series = norm.sessions;
+          currentId = norm.current;
+        }
+
+        // Offene Messreihe fortsetzen – nur wenn es gar keine gibt, eine neue anlegen.
+        if (!activeSeries()) {
+          const fresh = makeSeries();
+          series.push(fresh);
+          currentId = fresh.id;
+        }
+
+        selectedId = currentId;
+        $("autoSwitch").value = autoSwitch;
+        applyViewState(activeSeries());
+        persistState();
+      }
+
+      /* ============ Kernlogik ============ */
+
+      // Seitenwechsel während laufender Stillzeit → Split.
+      function setSide(side) {
+        const session = activeSeries();
+        if (session && isCurrentView()) {
+          const active = activeFeed();
+          if (active && active.side !== side) {
+            active.end = Date.now();
+            session.entries.push({ side, start: Date.now(), end: null });
+          }
+        }
+
+        currentSide = side;
+        updateControls();
+        scheduleSave();
+        renderFeed(Date.now());
+      }
+
+      function toggleFeed() {
+        const session = activeSeries();
+        if (!session || !isCurrentView()) return;
+
+        const active = activeFeed();
+        if (active) {
+          active.end = Date.now();
+          // Für die nächste Stillzeit ggf. automatisch die Gegenseite vorschlagen
+          if (autoSwitch === "on") {
+            currentSide = active.side === "left" ? "right" : "left";
+          }
+          $("feedDetails").open = true;
+        } else {
+          session.entries.push({ side: currentSide, start: Date.now(), end: null });
+        }
+
+        updateControls();
+        scheduleSave();
+        renderFeed(Date.now());
+      }
+
+      /* ============ Steuerung oben ============ */
+
+      function updateControls(now = Date.now()) {
+        const session = activeSeries();
+        const active = activeFeed();
+
+        $("sideLeft").classList.toggle("selected", currentSide === "left");
+        $("sideRight").classList.toggle("selected", currentSide === "right");
+
+        const toggleBtn = $("bigToggle");
+        toggleBtn.textContent = active ? "Stillzeit beenden" : "Stillzeit starten";
+        toggleBtn.classList.toggle("running", Boolean(active));
+        toggleBtn.disabled = !isCurrentView();
+        $("sideLeft").disabled = !isCurrentView();
+        $("sideRight").disabled = !isCurrentView();
+
+        // Großer Timer oben
+        const timerBox = $("liveTimer");
+        if (isCurrentView()) {
+          timerBox.hidden = false;
+          timerBox.classList.toggle("recording", Boolean(active));
+          $("liveStatus").textContent = active
+            ? `Aufzeichnung läuft · ${active.side === "left" ? "Links" : "Rechts"}`
+            : "Bereit";
+          $("liveTime").textContent = active ? fmt(now - active.start) : "00:00";
+        } else {
+          timerBox.hidden = true;
+        }
+      }
+
+      $("sideLeft").addEventListener("click", () => setSide("left"));
+      $("sideRight").addEventListener("click", () => setSide("right"));
+      $("bigToggle").addEventListener("click", toggleFeed);
+
+      $("autoSwitch").addEventListener("change", () => {
+        autoSwitch = $("autoSwitch").value;
+        scheduleSave();
+      });
+
+      function renderLastFeed(now) {
+        const box = $("lastFeed");
+        const finished = entries(activeSeries()).filter(e => e.end !== null);
+        const last = finished.length ? finished[finished.length - 1] : null;
+
+        if (!last) { box.hidden = true; return; }
+        box.hidden = false;
+        box.classList.toggle("side-left", last.side === "left");
+        box.classList.toggle("side-right", last.side !== "left");
+        box.innerHTML = `
+          <strong><i class="dot" style="background:rgba(255,255,255,.85)"></i>Zuletzt: ${last.side === "left" ? "Links" : "Rechts"}</strong>
+          ${dayLabel(last.end)} · ${timeOfDay(last.end)} Uhr<br>
+          Dauer: ${fmt(last.end - last.start)} <span style="opacity:.75">(${agoText(last.end, now)})</span>
+        `;
+      }
+
+      /* ============ Zeitstrahl ============ */
+
+      const graph = $("feedGraph");
+      const gctx = graph.getContext("2d");
+
+      function fillRoundRect(ctx, x, y, w, h, r) {
+        r = Math.min(r, w / 2, h / 2);
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.arcTo(x + w, y, x + w, y + r, r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+        ctx.lineTo(x + r, y + h);
+        ctx.arcTo(x, y + h, x, y + h - r, r);
+        ctx.lineTo(x, y + r);
+        ctx.arcTo(x, y, x + r, y, r);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      function resizeGraph() {
+        const rect = graph.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        graph.width = Math.max(1, Math.round(rect.width * dpr));
+        graph.height = Math.max(1, Math.round(rect.height * dpr));
+        gctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawTimeline(Date.now());
+      }
+
+      function effectiveSpanHours() { return zoomSpanHours ?? viewSpanHours; }
+
+      function moveView(direction) {
+        const span = effectiveSpanHours() * HOUR;
+        const now = Date.now();
+        const base = viewRight === null ? now : viewRight;
+        viewRight = Math.min(now, base - direction * span);
+        hideTapDetail();
+        drawTimeline(now);
+        scheduleSave();
+      }
+
+      function dataStartTime(session) {
+        const times = entries(session).map(e => e.start);
+        if (session?.startedAt) times.push(session.startedAt);
+        return times.length ? Math.min(...times) : Date.now();
+      }
+
+      function drawTimeline(now) {
+        try {
+          const rect = graph.getBoundingClientRect();
+          const w = rect.width;
+          const h = rect.height;
+          if (!w || !h) return;
+
+          gctx.clearRect(0, 0, w, h);
+          gctx.fillStyle = "#fffdfb";
+          gctx.fillRect(0, 0, w, h);
+
+          const session = selectedSeries();
+          const allEntries = entries(session).map(e => ({ ...e, end: e.end ?? now }));
+          const dataEnd = Math.max(now, ...allEntries.map(e => e.end));
+          const dataStart = dataStartTime(session);
+          const span = effectiveSpanHours() * HOUR;
+          const right = viewRight === null ? dataEnd : Math.min(viewRight, dataEnd);
+          const left = right - span;
+
+          const statusEl = $("graphStatus");
+          if (viewRight === null || right >= dataEnd - 30 * 1000) {
+            viewRight = null;
+            statusEl.textContent = "Ansicht: aktuelle Zeit · Balken antippen für Details";
+          } else {
+            statusEl.textContent =
+              `Ansicht: ${dayLabel(left)} ${timeOfDay(left)} – ${dayLabel(right)} ${timeOfDay(right)} Uhr`;
+          }
+          $("panForward").disabled = viewRight === null;
+          $("panBack").disabled = left <= dataStart + 1000;
+
+          const visible = allEntries.filter(e => e.end > left && e.start < right);
+          tapTargets = [];
+
+          const padL = 14, padR = 14, padT = 10, padB = 40;
+          const mapX = time => padL + ((time - left) / span) * (w - padL - padR);
+
+          const spanHours = effectiveSpanHours();
+          const stepMs = spanHours <= 1 ? 15 * 60 * 1000
+            : spanHours <= 3 ? 30 * 60 * 1000
+            : spanHours <= 12 ? 2 * HOUR
+            : spanHours <= 24 ? 3 * HOUR
+            : 12 * HOUR;
+          const firstTick = Math.ceil(left / stepMs) * stepMs;
+
+          gctx.strokeStyle = "#eee4dc";
+          gctx.lineWidth = 1;
+          gctx.font = "10px system-ui, sans-serif";
+          gctx.textAlign = "center";
+
+          for (let t = firstTick; t <= right; t += stepMs) {
+            const x = mapX(t);
+            if (x < padL || x > w - padR) continue;
+
+            gctx.beginPath();
+            gctx.moveTo(x, padT);
+            gctx.lineTo(x, h - padB);
+            gctx.stroke();
+
+            gctx.fillStyle = "#796b65";
+            gctx.fillText(timeOfDay(t), x, h - padB + 14);
+
+            const date = new Date(t);
+            if (date.getHours() === 0 && date.getMinutes() === 0) {
+              gctx.fillText(dayLabel(t), x, h - padB + 28);
+            }
+          }
+
+          if (!visible.length) {
+            gctx.fillStyle = "#796b65";
+            gctx.font = "14px system-ui, sans-serif";
+            gctx.textAlign = "center";
+            gctx.fillText(
+              allEntries.length ? "In diesem Zeitraum keine Stillzeiten" : "Deine Stillzeiten erscheinen hier",
+              w / 2, h / 2
+            );
+            return;
+          }
+
+          const midY = (padT + (h - padB - 4)) / 2;
+          const half = (midY - padT);
+
+          gctx.strokeStyle = "#eaded5";
+          gctx.beginPath();
+          gctx.moveTo(padL, midY);
+          gctx.lineTo(w - padR, midY);
+          gctx.stroke();
+
+          gctx.fillStyle = "#a89a92";
+          gctx.font = "10px system-ui, sans-serif";
+          gctx.textAlign = "left";
+          gctx.fillText("Links ▲", padL + 2, midY - 4);
+          gctx.fillText("Rechts ▼", padL + 2, midY + 12);
+
+          function assignRows(list) {
+            const sorted = [...list].sort((a, b) => a.start - b.start);
+            const rows = [];
+            for (const entry of sorted) {
+              let row = 0;
+              while (rows[row]?.some(o => entry.start < o.end && o.start < entry.end)) row++;
+              (rows[row] ||= []).push(entry);
+              entry.row = row;
+            }
+            return sorted;
+          }
+
+          const leftRows = assignRows(visible.filter(e => e.side === "left"));
+          const rightRows = assignRows(visible.filter(e => e.side === "right"));
+          const maxRows = Math.max(
+            leftRows.reduce((m, e) => Math.max(m, e.row + 1), 1),
+            rightRows.reduce((m, e) => Math.max(m, e.row + 1), 1)
+          );
+
+          const barH = Math.max(8, Math.min(30, (half - 8) / maxRows - 3));
+
+          function pushBar(entry, x1, x2, y) {
+            const cx1 = Math.max(x1, padL);
+            const cx2 = Math.min(x2, w - padR);
+            if (cx2 <= cx1) return;
+            tapTargets.push({
+              side: entry.side, start: entry.start, end: entry.end,
+              x: cx1, y, w: cx2 - cx1, h: barH
+            });
+          }
+
+          for (const e of leftRows) {
+            pushBar(e, mapX(e.start), mapX(e.end),
+              midY - 6 - (e.row + 1) * barH - e.row * 3);
+          }
+          for (const e of rightRows) {
+            pushBar(e, mapX(e.start), mapX(e.end),
+              midY + 6 + e.row * (barH + 3));
+          }
+
+          for (const t of tapTargets) {
+            gctx.fillStyle = t.side === "left" ? "#bd6553" : "#cfa75f";
+            fillRoundRect(gctx, t.x, t.y, t.w, t.h, 5);
+          }
+        } catch (error) {
+          $("graphStatus").textContent = "Fehler im Zeitstrahl: " + error.message;
+        }
+      }
+
+      /* ============ Antippen (Pointer-Events) ============ */
+
+      const TAP_RADIUS = 16;
+      const MOVE_TOLERANCE = 18;
+      const MAX_POINTER_MS = 900;
+
+      let pointerDown = null;
+
+      function hideTapDetail() {
+        openDetail = null;
+        $("tapDetailHost").innerHTML = "";
+      }
+
+      function showTapDetail(data, now) {
+        openDetail = { ...data };
+
+        $("tapDetailHost").innerHTML = `
+          <div class="tap-detail ${data.side === "left" ? "side-left" : "side-right"}">
+            <button class="tap-close" type="button" aria-label="Schließen">×</button>
+            <div class="tap-title">Stillzeit · ${data.side === "left" ? "links" : "rechts"}</div>
+            <div>${dayLabel(data.start)} · ${timeOfDay(data.start)} Uhr</div>
+            <div>Dauer: ${fmt((data.end ?? now) - data.start)}</div>
+            <div>${agoText(data.start, now)}</div>
+          </div>
+        `;
+        $("tapDetailHost").querySelector(".tap-close").addEventListener("click", event => {
+          event.stopPropagation();
+          hideTapDetail();
+        });
+      }
+
+      function findTargetAt(clientX, clientY) {
+        const rect = graph.getBoundingClientRect();
+        const x = clientX - rect.left;
+        const y = clientY - rect.top;
+
+        let best = null;
+        let bestDistance = Infinity;
+
+        for (const target of tapTargets) {
+          const dx = x < target.x ? target.x - x
+            : x > target.x + target.w ? x - (target.x + target.w) : 0;
+          const dy = y < target.y ? target.y - y
+            : y > target.y + target.h ? y - (target.y + target.h) : 0;
+          const distance = Math.hypot(dx, dy);
+
+          if (distance <= TAP_RADIUS && distance < bestDistance) {
+            best = target;
+            bestDistance = distance;
+          }
+        }
+        return best;
+      }
+
+      graph.addEventListener("pointerdown", event => {
+        pointerDown = { x: event.clientX, y: event.clientY, time: Date.now() };
+      });
+
+      graph.addEventListener("pointerup", event => {
+        if (!pointerDown) return;
+        const start = pointerDown;
+        pointerDown = null;
+
+        const moved = Math.hypot(event.clientX - start.x, event.clientY - start.y);
+        const duration = Date.now() - start.time;
+
+        if (moved > MOVE_TOLERANCE || duration > MAX_POINTER_MS) return;
+
+        const hit = findTargetAt(event.clientX, event.clientY);
+        if (hit) showTapDetail(hit, Date.now());
+        else hideTapDetail();
+      });
+
+      graph.addEventListener("pointercancel", () => { pointerDown = null; });
+      $("tapDetailHost").addEventListener("pointerdown", event => event.stopPropagation());
+
+      /* ============ Statistik ============ */
+
+      function renderStats(now) {
+        const session = selectedSeries();
+        const today = entries(session).filter(e =>
+          e.end !== null && isSameDay(e.start, now));
+
+        const sideStat = side => {
+          const list = today.filter(e => e.side === side);
+          const total = list.reduce((s, e) => s + (e.end - e.start), 0);
+          return { count: list.length, total: list.length ? fmt(total) : "—" };
+        };
+        const l = sideStat("left"), r = sideStat("right");
+        const grandTotal = today.reduce((s, e) => s + (e.end - e.start), 0);
+
+        $("statsBox").innerHTML = `
+          <div class="stat stat-left"><span>Links heute</span><strong>${l.count} × · ${l.total}</strong></div>
+          <div class="stat stat-right"><span>Rechts heute</span><strong>${r.count} × · ${r.total}</strong></div>
+          <div class="stat stat-total"><span>Gesamt heute</span><strong>${today.length} × · ${today.length ? fmt(grandTotal) : "—"}</strong></div>
+        `;
+      }
+
+      /* ============ Listen ============ */
+
+      function renderFeedList() {
+        const list = $("feedList");
+        const session = selectedSeries();
+        const finished = entries(session).filter(e => e.end !== null)
+          .sort((a, b) => b.start - a.start);
+
+        $("feedSummary").textContent = `Einträge anzeigen (${finished.length})`;
+
+        if (!finished.length) {
+          list.innerHTML = '<div class="empty">Noch keine Stillzeiten erfasst.</div>';
+          return;
+        }
+
+        list.innerHTML = finished.slice(0, 100).map(entry => `
+          <div class="feed-row ${entry.side === "left" ? "side-left" : "side-right"}">
+            <div class="feed-info">
+              <div class="feed-title"><span class="side-badge">${entry.side === "left" ? "L" : "R"}</span>${dayLabel(entry.start)} · ${timeOfDay(entry.start)} Uhr</div>
+              <div class="feed-detail">Dauer: ${fmt(entry.end - entry.start)}</div>
+            </div>
+            ${isCurrentView()
+              ? `<button class="delete-button" type="button" data-delete="${entry.start}">Löschen</button>`
+              : ""}
+          </div>
+        `).join("");
+
+        list.querySelectorAll("[data-delete]").forEach(button => {
+          button.addEventListener("click", () => {
+            const start = Number(button.dataset.delete);
+            if (!confirm("Diesen Still-Eintrag löschen?")) return;
+            const session = activeSeries();
+            if (!session) return;
+            session.entries = session.entries.filter(e => e.start !== start);
+            scheduleSave();
+            renderFeed(Date.now());
+          });
+        });
+      }
+
+      function renderHistory() {
+        const list = $("historyList");
+        const ordered = [...series].sort((a, b) => b.startedAt - a.startedAt);
+
+        $("historySummary").textContent = `Gespeicherte Reihen anzeigen (${series.length})`;
+
+        if (!ordered.length) {
+          list.innerHTML = '<div class="empty">Noch keine gespeicherten Reihen.</div>';
+          return;
+        }
+
+        list.innerHTML = ordered.map(session => {
+          const isCurrent = session.id === currentId;
+          const isSelected = session.id === selectedId;
+          const label = isCurrent ? "Aktuell" : session.finished ? "Beendet" : "Gespeichert";
+          const totals = { left: 0, right: 0 };
+          for (const e of entries(session)) {
+            if (e.end !== null) totals[e.side] += e.end - e.start;
+          }
+          const split = `L ${fmt(totals.left)} · R ${fmt(totals.right)}`;
+
+          return `
+            <div class="feed-row">
+              <div class="feed-info">
+                <div class="feed-title">${dateTime(session.startedAt)}</div>
+                <div class="feed-detail">${label} · ${entries(session).length} Stillzeiten · ${split}</div>
+              </div>
+              <button class="history-button" type="button" data-open="${session.id}" ${isSelected ? "disabled" : ""}>
+                ${isSelected ? "Angezeigt" : "Öffnen"}
+              </button>
+            </div>
+          `;
+        }).join("");
+
+        list.querySelectorAll("[data-open]").forEach(button => {
+          button.addEventListener("click", () => {
+            const session = series.find(s => s.id === button.dataset.open);
+            if (!session) return;
+            // Geöffnete Reihe wird zur aktiven Messreihe – egal ob beendet oder nicht.
+            session.finished = false;
+            currentId = session.id;
+            selectedId = session.id;
+            hideTapDetail();
+            applyViewState(session); // letztes Zoom-/Blickfenster wiederherstellen
+            scheduleSave();
+            renderFeed(Date.now());
+          });
+        });
+      }
+
+      /* ============ Zeitraum, Zoom, Navigation ============ */
+
+      document.querySelectorAll(".span-button").forEach(button => {
+        button.addEventListener("click", () => {
+          document.querySelectorAll(".span-button").forEach(b => b.classList.remove("active"));
+          button.classList.add("active");
+          viewSpanHours = Number(button.dataset.span);
+          zoomSpanHours = null;
+          hideTapDetail();
+          drawTimeline(Date.now());
+          scheduleSave();
+        });
+      });
+
+      function zoomBy(factor) {
+        zoomSpanHours = Math.max(0.25, Math.min(24 * 7, effectiveSpanHours() * factor));
+        syncSpanButtons();
+        hideTapDetail();
+        drawTimeline(Date.now());
+        scheduleSave();
+      }
+
+      $("zoomIn").addEventListener("click", () => zoomBy(1 / 1.5));
+      $("zoomOut").addEventListener("click", () => zoomBy(1.5));
+      $("panBack").addEventListener("click", () => moveView(1));
+      $("panForward").addEventListener("click", () => moveView(-1));
+
+      $("jumpNow").addEventListener("click", () => {
+        viewRight = null;
+        hideTapDetail();
+        drawTimeline(Date.now());
+        scheduleSave();
+      });
+
+      /* ============ Messreihen ============ */
+
+      $("finishSeries").addEventListener("click", () => {
+        const session = activeSeries();
+        if (!session || !isCurrentView()) return;
+        if (!confirm("Die aktuelle Messreihe beenden? Sie bleibt in der Historie gespeichert.")) return;
+
+        const now = Date.now();
+        for (const e of session.entries) {
+          if (e.end === null) e.end = now;
+        }
+        session.finished = true;
+        session.endedAt = now;
+        scheduleSave();
+        renderFeed(now);
+      });
+
+      $("newSeries").addEventListener("click", () => {
+        if (!confirm("Eine neue Messreihe starten? Die bisherige Messreihe wird gespeichert und bleibt in der Historie erhalten.")) return;
+
+        const oldSession = activeSeries();
+        if (oldSession && !oldSession.finished) {
+          const now = Date.now();
+          for (const e of oldSession.entries) {
+            if (e.end === null) e.end = now;
+          }
+          oldSession.finished = true;
+          oldSession.endedAt = now;
+        }
+
+        const fresh = makeSeries();
+        series.push(fresh);
+        currentId = fresh.id;
+        selectedId = fresh.id;
+        hideTapDetail();
+        applyViewState(fresh);
+        scheduleSave();
+        renderFeed(Date.now());
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      });
+
+      /* ============ Export / Import ============ */
+
+      $("exportData").addEventListener("click", () => {
+        persistState();
+        const payload = JSON.stringify({ currentSide, series, currentId, autoSwitch }, null, 2);
+        const blob = new Blob([payload], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `still-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
+        link.click();
+        URL.revokeObjectURL(url);
+      });
+
+      $("importData").addEventListener("click", () => $("importFile").click());
+
+      $("importFile").addEventListener("change", event => {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const data = JSON.parse(reader.result);
+            if (!data || !Array.isArray(data.series)) {
+              alert("Diese Datei enthält keine gültigen Still-Tracker-Daten.");
+              return;
+            }
+            if (!confirm("Gespeicherte Daten mit dieser Sicherung ersetzen?")) return;
+            localStorage.setItem(STORAGE_KEY, reader.result);
+            location.reload();
+          } catch {
+            alert("Die Datei konnte nicht gelesen werden.");
+          }
+        };
+        reader.readAsText(file);
+        event.target.value = "";
+      });
+
+      /* ============ Hilfe ============ */
+
+      const helpDialog = $("helpDialog");
+      $("helpButton").addEventListener("click", () => helpDialog.showModal());
+      $("helpClose").addEventListener("click", () => helpDialog.close());
+      helpDialog.addEventListener("click", event => {
+        if (event.target === helpDialog) helpDialog.close();
+      });
+
+      /* ============ Zentrales Rendering ============ */
+
+      function renderFeed(now) {
+        const session = selectedSeries();
+        const currentView = isCurrentView();
+
+        $("viewingBanner").hidden = currentView;
+        $("viewingBanner").textContent = "";
+
+        const active = activeFeed();
+        $("feedHint").textContent = active
+          ? "Seitenwechsel während des Stillens teilt die Aufzeichnung automatisch."
+          : "Seite wählen, dann starten. Seitenwechsel mitten im Stillen wird automatisch gesplittet.";
+
+        renderLastFeed(now);
+        renderStats(now);
+        renderFeedList();
+        renderHistory();
+        drawTimeline(now);
+      }
+
+      window.addEventListener("resize", () => {
+        hideTapDetail();
+        resizeGraph();
+      });
+
+      /* ============ Sofortiges Sichern beim Schließen/Verbergen ============
+         Diese Ereignisse feuern zuverlässig auf allen gängigen Systemen
+         (Windows, macOS, Android, iOS), egal ob der Browser oder die
+         komplette App geschlossen, umgeschaltet oder in den Hintergrund
+         gelegt wird. So ist der Stand auch im schlimmsten Fall gesichert. */
+
+      window.addEventListener("pagehide", persistState);
+      window.addEventListener("beforeunload", persistState);
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") persistState();
+      });
+
+      /* ============ Start ============ */
+
+      loadAll();
+      updateControls();
+      resizeGraph();
+      renderFeed(Date.now());
+      window.setInterval(() => {
+        const now = Date.now();
+        updateControls(now);
+        renderFeed(now);
+      }, 500);
+    })();
+  </script>
+</body>
+</html>
