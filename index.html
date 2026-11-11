@@ -7,14 +7,15 @@
   <title>Still-Tracker</title>
   <!--
     ============================================================
-    Still-Tracker · Version 18 (Speicher-Optimierung)
-    Erstellt / weiterentwickelt: 10.11.2026
-    Bearbeitet von: Lumo (Proton) im Auftrag der Nutzerin/des Nutzers
-    Neu in v18:
-    - Sofortiges Speichern bei jeder Änderung (kein 200-ms-Debounce mehr)
-    - Speichern zusätzlich beim Verbergen/Schließen der Seite/App
-    - Deutliche Warnung, falls der Browser-Speicher verweigert wird
-      (z. B. Privatmodus oder Speicher voll) statt stillem Datenverlust
+    Still-Tracker · Version 19
+    Datum: 10.11.2026
+    Entwickelt von: Lumo (Proton) im Auftrag der Nutzerin/des Nutzers
+    Neu in v19 (aufbauend auf v18 Speicher-Optimierung):
+    - "zurück"-Blättern stoppt exakt am Datenanfang (kein Weiterblättern
+      in datenlose Bereiche, auch bei hineingezoomtem Fenster)
+    - "Zuletzt"-Box ist antippbar: Notiz zur letzten Stillzeit
+      erfassen/ändern; Notiz wird gespeichert und in "Zuletzt" und
+      in der Stillzeiten-Liste angezeigt
     ============================================================
   -->
   <style>
@@ -142,12 +143,20 @@
       font-size: .9rem;
       line-height: 1.55;
       text-align: center;
+      cursor: pointer;
     }
 
     .last-feed.side-left { background: var(--left); color: white; }
     .last-feed.side-right { background: var(--right-strong); color: #3f3212; }
 
     .last-feed strong { font-size: .98rem; display: block; margin-bottom: 2px; }
+    .last-feed .feed-note {
+      margin-top: 6px;
+      padding-top: 6px;
+      border-top: 1px solid rgba(255,255,255,.35);
+      font-style: italic;
+      overflow-wrap: anywhere;
+    }
 
     .hint { min-height: 1.35em; margin: 12px 0 0; color: var(--muted); font-size: .86rem; }
 
@@ -252,6 +261,7 @@
     .feed-info { min-width: 0; }
     .feed-title { font-weight: 650; }
     .feed-detail { margin-top: 3px; color: var(--muted); font-size: .82rem; }
+    .feed-detail.feed-note { color: var(--ink); font-style: italic; overflow-wrap: anywhere; }
 
     .delete-button, .history-button {
       flex: 0 0 auto;
@@ -371,7 +381,7 @@
       </div>
 
       <button class="big-toggle" id="bigToggle" type="button">Stillzeit starten</button>
-      <div class="last-feed" id="lastFeed" hidden></div>
+      <div class="last-feed" id="lastFeed" hidden title="Antippen: Notiz zur letzten Stillzeit"></div>
       <p class="hint" id="feedHint"></p>
     </section>
 
@@ -478,13 +488,13 @@
         <li><strong>Einstellung „Nach dem Stillen die Seite …":</strong> Mit „automatisch wechseln" stellt der Tracker nach Beenden einer Stillzeit automatisch die andere Seite ein; mit „nicht ändern" bleibt die gewählte Seite stehen.</li>
       </ul>
 
-      <h4>Letzte Stillzeit</h4>
-      <p>Unter dem Start-Button siehst du die zuletzt beendete Stillzeit: Seite, Tag, Uhrzeit und Dauer.</p>
+      <h4>Letzte Stillzeit &amp; Notiz</h4>
+      <p>Unter dem Start-Button siehst du die zuletzt beendete Stillzeit: Seite, Tag, Uhrzeit und Dauer. <strong>Antippen</strong> der Box öffnet ein Eingabefeld für eine <strong>Notiz</strong> zu dieser Stillzeit (z. B. Besonderheiten beim Trinken). Die Notiz wird gespeichert und erscheint in der Box sowie in der Stillzeiten-Liste. Zum Ändern oder Löschen einfach erneut antippen (Feld leeren = Notiz entfernen).</p>
 
       <h4>Zeitstrahl</h4>
       <ul>
         <li>Die Zeitraum-Buttons (1 Std bis 7 Tage) legen das Fenster fest, − / + zoomen darüber hinaus.</li>
-        <li>„◀ zurück" / „vor ▶" blättern in der Vergangenheit, „Jetzt" springt zur aktuellen Zeit.</li>
+        <li>„◀ zurück" / „vor ▶" blättern nur innerhalb der vorhandenen Daten – über den ältesten Eintrag hinaus kann nicht geblättert werden.</li>
         <li>Einen Balken antippen zeigt Details zur Stillzeit. Der Zeitstrahl läuft live mit, auch während des Stillens.</li>
         <li>Der Zoom- und Blickzustand wird pro Messreihe gemerkt und beim erneuten Öffnen wiederhergestellt.</li>
       </ul>
@@ -502,7 +512,7 @@
       </ul>
 
       <h4>Sicherung</h4>
-      <p>Mit „Sicherung exportieren" speicherst du alle Daten als JSON-Datei, mit „Sicherung importieren" stellst du sie wieder her (überschreibt die aktuellen Daten).</p>
+      <p>Mit „Sicherung exportieren" speicherst du alle Daten als JSON-Datei (Notizen eingeschlossen), mit „Sicherung importieren" stellst du sie wieder her (überschreibt die aktuellen Daten).</p>
     </div>
   </dialog>
 
@@ -562,10 +572,8 @@
         }
       }
 
-      // v18: Sofortiges Speichern bei JEDER Änderung (kein Debounce mehr),
-      // damit selbst das plötzliche Schließen von App/Browser nichts verliert.
-      // Zusätzlich sichert der untenstehende Ereignis-Block beim Verbergen
-      // oder Schließen der Seite nochmals explizit.
+      // v18: Sofortiges Speichern bei JEDER Änderung (kein Debounce),
+      // zusätzlich sichert der Ereignis-Block unten beim Verbergen/Schließen.
       function scheduleSave() {
         persistState();
       }
@@ -650,13 +658,24 @@
                da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
       }
 
+      function escapeHtml(text) {
+        return String(text)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;");
+      }
+
       /* ============ Laden & Migration ============ */
 
       function sanitizeEntry(e) {
         if (!e || (e.side !== "left" && e.side !== "right")) return null;
         if (!Number.isFinite(e.start)) return null;
         if (e.end !== null && !Number.isFinite(e.end)) return null;
-        return { side: e.side, start: e.start, end: e.end };
+        return {
+          side: e.side, start: e.start, end: e.end,
+          // v19: Notiz zum Eintrag (optional, bleibt über Migrationen erhalten)
+          note: typeof e.note === "string" ? e.note : ""
+        };
       }
 
       function normalizeSessions(rawSessions, currentIdRaw) {
@@ -824,10 +843,36 @@
         scheduleSave();
       });
 
+      /* ============ Notiz zur letzten Stillzeit (v19) ============ */
+
+      function lastFinishedEntry(session) {
+        const finished = entries(session).filter(e => e.end !== null);
+        return finished.length ? finished[finished.length - 1] : null;
+      }
+
+      function editLastNote() {
+        const session = activeSeries();
+        const last = lastFinishedEntry(session);
+        if (!last) return;
+
+        const input = prompt(
+          "Notiz zur letzten Stillzeit (" + dayLabel(last.end) + " " +
+          timeOfDay(last.end) + " Uhr, " + (last.side === "left" ? "links" : "rechts") + "):\n" +
+          "(Leer lassen und OK = Notiz löschen)",
+          last.note || ""
+        );
+        if (input === null) return; // Abbruch
+
+        last.note = input.trim();
+        scheduleSave();
+        renderFeed(Date.now());
+      }
+
+      $("lastFeed").addEventListener("click", editLastNote);
+
       function renderLastFeed(now) {
         const box = $("lastFeed");
-        const finished = entries(activeSeries()).filter(e => e.end !== null);
-        const last = finished.length ? finished[finished.length - 1] : null;
+        const last = lastFinishedEntry(activeSeries());
 
         if (!last) { box.hidden = true; return; }
         box.hidden = false;
@@ -837,6 +882,7 @@
           <strong><i class="dot" style="background:rgba(255,255,255,.85)"></i>Zuletzt: ${last.side === "left" ? "Links" : "Rechts"}</strong>
           ${dayLabel(last.end)} · ${timeOfDay(last.end)} Uhr<br>
           Dauer: ${fmt(last.end - last.start)} <span style="opacity:.75">(${agoText(last.end, now)})</span>
+          ${last.note ? `<div class="feed-note">📝 ${escapeHtml(last.note)}</div>` : `<div style="opacity:.7;font-size:.78rem;margin-top:4px">Antippen für Notiz</div>`}
         `;
       }
 
@@ -876,7 +922,22 @@
         const span = effectiveSpanHours() * HOUR;
         const now = Date.now();
         const base = viewRight === null ? now : viewRight;
-        viewRight = Math.min(now, base - direction * span);
+
+        let candidate = base - direction * span;
+
+        // v19: Blättern niemals in datenlose Bereiche – der linke Rand des
+        // Fensters bleibt mindestens am frühesten vorhandenen Eintrag.
+        const dataStart = dataStartTime(selectedSeries());
+        const earliestRight = dataStart + span; // kleiner geht nicht: left = right - span >= dataStart
+        candidate = Math.max(candidate, earliestRight);
+
+        // Und nie über die Gegenwart hinaus.
+        candidate = Math.min(candidate, now);
+
+        // Wenn auch bei "ganz rechts" kein sinnvoller Ausschnitt bleibt
+        // (z. B. gesamte Datenmenge kürzer als das Fenster), leben lassen.
+        viewRight = candidate >= now - 1000 ? null : candidate;
+
         hideTapDetail();
         drawTimeline(now);
         scheduleSave();
@@ -915,8 +976,11 @@
             statusEl.textContent =
               `Ansicht: ${dayLabel(left)} ${timeOfDay(left)} – ${dayLabel(right)} ${timeOfDay(right)} Uhr`;
           }
+
+          // v19: "zurück" exakt wie "vor" sperren, sobald am Datenanfang angekommen.
+          $("panBack").disabled = left <= dataStart + 1000 || viewRight === null && left <= dataStart + 1000;
+          $("panBack").disabled = (right - span) <= dataStart + 1000;
           $("panForward").disabled = viewRight === null;
-          $("panBack").disabled = left <= dataStart + 1000;
 
           const visible = allEntries.filter(e => e.end > left && e.start < right);
           tapTargets = [];
@@ -1044,6 +1108,8 @@
       }
 
       function showTapDetail(data, now) {
+        const session = selectedSeries();
+        const entry = entries(session).find(e => e.start === data.start && e.side === data.side);
         openDetail = { ...data };
 
         $("tapDetailHost").innerHTML = `
@@ -1053,6 +1119,7 @@
             <div>${dayLabel(data.start)} · ${timeOfDay(data.start)} Uhr</div>
             <div>Dauer: ${fmt((data.end ?? now) - data.start)}</div>
             <div>${agoText(data.start, now)}</div>
+            ${entry && entry.note ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,.35);font-style:italic">📝 ${escapeHtml(entry.note)}</div>` : ""}
           </div>
         `;
         $("tapDetailHost").querySelector(".tap-close").addEventListener("click", event => {
@@ -1148,6 +1215,7 @@
             <div class="feed-info">
               <div class="feed-title"><span class="side-badge">${entry.side === "left" ? "L" : "R"}</span>${dayLabel(entry.start)} · ${timeOfDay(entry.start)} Uhr</div>
               <div class="feed-detail">Dauer: ${fmt(entry.end - entry.start)}</div>
+              ${entry.note ? `<div class="feed-detail feed-note">📝 ${escapeHtml(entry.note)}</div>` : ""}
             </div>
             ${isCurrentView()
               ? `<button class="delete-button" type="button" data-delete="${entry.start}">Löschen</button>`
