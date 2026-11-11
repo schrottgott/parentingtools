@@ -7,15 +7,14 @@
   <title>Still-Tracker</title>
   <!--
     ============================================================
-    Still-Tracker · Version 19
-    Datum: 10.11.2026
+    Still-Tracker · Version 20
+    Datum: 11.11.2026
     Entwickelt von: Lumo (Proton) im Auftrag der Nutzerin/des Nutzers
-    Neu in v19 (aufbauend auf v18 Speicher-Optimierung):
-    - "zurück"-Blättern stoppt exakt am Datenanfang (kein Weiterblättern
-      in datenlose Bereiche, auch bei hineingezoomtem Fenster)
-    - "Zuletzt"-Box ist antippbar: Notiz zur letzten Stillzeit
-      erfassen/ändern; Notiz wird gespeichert und in "Zuletzt" und
-      in der Stillzeiten-Liste angezeigt
+    Neu in v20 (aufbauend auf v19):
+    - Notiz auch zur LAUFenden Stillzeit: Timer-Kasten antippen
+    - Messreihen in der Historie löschen (analog Wellen-Tracker)
+    - Notizen nachträglich pro Eintrag in der Stillzeiten-Liste
+      anlegen/ändern/löschen
     ============================================================
   -->
   <style>
@@ -93,6 +92,8 @@
       border-color: #e8cbc3;
     }
 
+    .live-timer.tappable { cursor: pointer; }
+
     .live-status {
       color: var(--muted);
       font-size: .78rem;
@@ -106,6 +107,17 @@
       font-weight: 750;
       font-variant-numeric: tabular-nums;
       line-height: 1.1;
+    }
+
+    .live-note {
+      margin-top: 2px;
+      font-size: .8rem;
+      font-style: italic;
+      color: var(--ink);
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .side-btn {
@@ -263,7 +275,9 @@
     .feed-detail { margin-top: 3px; color: var(--muted); font-size: .82rem; }
     .feed-detail.feed-note { color: var(--ink); font-style: italic; overflow-wrap: anywhere; }
 
-    .delete-button, .history-button {
+    .row-buttons { display: flex; gap: 6px; flex: 0 0 auto; }
+
+    .delete-button, .history-button, .note-button {
       flex: 0 0 auto;
       min-height: 38px;
       padding: 6px 10px;
@@ -273,6 +287,8 @@
       color: var(--ink);
       font-size: .84rem;
     }
+
+    .note-button { border-color: #d8c9ae; background: #fdf8ee; }
 
     .empty { padding: 12px 0; color: var(--muted); text-align: center; font-size: .9rem; }
     .note { margin: 18px 2px 0; color: var(--muted); font-size: .79rem; line-height: 1.5; }
@@ -370,9 +386,10 @@
 
     <section class="card" aria-live="polite">
 
-      <div class="live-timer" id="liveTimer" hidden>
+      <div class="live-timer" id="liveTimer" title="">
         <span class="live-status" id="liveStatus"></span>
         <span class="live-time" id="liveTime">00:00</span>
+        <span class="live-note" id="liveNote" hidden></span>
       </div>
 
       <div class="controls">
@@ -488,8 +505,13 @@
         <li><strong>Einstellung „Nach dem Stillen die Seite …":</strong> Mit „automatisch wechseln" stellt der Tracker nach Beenden einer Stillzeit automatisch die andere Seite ein; mit „nicht ändern" bleibt die gewählte Seite stehen.</li>
       </ul>
 
-      <h4>Letzte Stillzeit &amp; Notiz</h4>
-      <p>Unter dem Start-Button siehst du die zuletzt beendete Stillzeit: Seite, Tag, Uhrzeit und Dauer. <strong>Antippen</strong> der Box öffnet ein Eingabefeld für eine <strong>Notiz</strong> zu dieser Stillzeit (z. B. Besonderheiten beim Trinken). Die Notiz wird gespeichert und erscheint in der Box sowie in der Stillzeiten-Liste. Zum Ändern oder Löschen einfach erneut antippen (Feld leeren = Notiz entfernen).</p>
+      <h4>Notizen</h4>
+      <ul>
+        <li><strong>Während des Stillens:</strong> Tippe auf den Timer-Kasten oben, um eine Notiz zur laufenden Stillzeit zu erfassen. Sie wandert beim Beenden automatisch mit dem Eintrag mit.</li>
+        <li><strong>Nach dem Stillen:</strong> Tippe auf die „Zuletzt"-Box unter dem Start-Button, um eine Notiz zur letzten Stillzeit zu erfassen oder zu ändern.</li>
+        <li><strong>Nachträglich:</strong> Jede Stillzeit in der Liste unten hat einen „Notiz"-Button. Leeres Feld + OK entfernt die Notiz wieder.</li>
+        <li>Notizen werden in der Box, in der Liste, im Zeitstrahl-Detail und im Backup gespeichert.</li>
+      </ul>
 
       <h4>Zeitstrahl</h4>
       <ul>
@@ -506,6 +528,7 @@
       <ul>
         <li>Das Schließen des Browsers oder der Seite beendet <strong>keine</strong> Messreihe – beim nächsten Öffnen wird die aktuelle Reihe automatisch fortgeführt, auch eine laufende Stillzeit läuft weiter.</li>
         <li>Jede gespeicherte Reihe lässt sich über „Öffnen" ansehen und wird dabei sofort wieder zur aktuellen Messreihe – egal ob sie vorher beendet wurde oder nicht. Direkt danach kann in ihr weitergemessen werden.</li>
+        <li>Jede Reihe in der Historie kann über „Löschen" endgültig entfernt werden (mit Bestätigung).</li>
         <li>„Messreihe beenden" schließt die aktuelle Aufzeichnung ab; sie bleibt in der Historie.</li>
         <li>„Neue Messreihe starten" beginnt eine frische Aufzeichnung; alte Reihen bleiben erhalten.</li>
         <li><strong>Speichern:</strong> Jede Änderung wird sofort gespeichert – zusätzlich auch beim Verbergen oder Schließen der Seite/App. Falls das Speichern verweigert wird (z. B. Privatmodus), erscheint oben eine deutliche Warnung.</li>
@@ -663,6 +686,21 @@
           .replaceAll("&", "&amp;")
           .replaceAll("<", "&lt;")
           .replaceAll(">", "&gt;");
+      }
+
+      /* ============ Notizen (v19/v20) ============ */
+
+      function promptNote(entry) {
+        if (!entry) return;
+        const when = `${dayLabel(entry.start)} ${timeOfDay(entry.start)} Uhr, ${entry.side === "left" ? "links" : "rechts"}`;
+        const input = prompt(
+          `Notiz zur Stillzeit (${when}):\n(Leer lassen und OK = Notiz löschen)`,
+          entry.note || ""
+        );
+        if (input === null) return; // Abbruch
+        entry.note = input.trim();
+        scheduleSave();
+        renderFeed(Date.now());
       }
 
       /* ============ Laden & Migration ============ */
@@ -825,10 +863,24 @@
         if (isCurrentView()) {
           timerBox.hidden = false;
           timerBox.classList.toggle("recording", Boolean(active));
+          // v20: Antippen im laufenden Stillen → Notiz erfassen
+          timerBox.classList.toggle("tappable", Boolean(active));
+          timerBox.title = active
+            ? "Antippen: Notiz zur laufenden Stillzeit"
+            : "";
           $("liveStatus").textContent = active
-            ? `Aufzeichnung läuft · ${active.side === "left" ? "Links" : "Rechts"}`
+            ? `Aufzeichnung läuft · ${active.side === "left" ? "Links" : "Rechts"}${active.note ? " · 📝" : ""}`
             : "Bereit";
           $("liveTime").textContent = active ? fmt(now - active.start) : "00:00";
+
+          const noteEl = $("liveNote");
+          if (active && active.note) {
+            noteEl.hidden = false;
+            noteEl.textContent = "📝 " + active.note;
+          } else {
+            noteEl.hidden = true;
+            noteEl.textContent = "";
+          }
         } else {
           timerBox.hidden = true;
         }
@@ -838,37 +890,27 @@
       $("sideRight").addEventListener("click", () => setSide("right"));
       $("bigToggle").addEventListener("click", toggleFeed);
 
+      // v20: Notiz zur laufenden Stillzeit
+      $("liveTimer").addEventListener("click", () => {
+        const active = activeFeed();
+        if (active && isCurrentView()) promptNote(active);
+      });
+
       $("autoSwitch").addEventListener("change", () => {
         autoSwitch = $("autoSwitch").value;
         scheduleSave();
       });
 
-      /* ============ Notiz zur letzten Stillzeit (v19) ============ */
+      /* ============ Letzte Stillzeit ============ */
 
       function lastFinishedEntry(session) {
         const finished = entries(session).filter(e => e.end !== null);
         return finished.length ? finished[finished.length - 1] : null;
       }
 
-      function editLastNote() {
-        const session = activeSeries();
-        const last = lastFinishedEntry(session);
-        if (!last) return;
-
-        const input = prompt(
-          "Notiz zur letzten Stillzeit (" + dayLabel(last.end) + " " +
-          timeOfDay(last.end) + " Uhr, " + (last.side === "left" ? "links" : "rechts") + "):\n" +
-          "(Leer lassen und OK = Notiz löschen)",
-          last.note || ""
-        );
-        if (input === null) return; // Abbruch
-
-        last.note = input.trim();
-        scheduleSave();
-        renderFeed(Date.now());
-      }
-
-      $("lastFeed").addEventListener("click", editLastNote);
+      $("lastFeed").addEventListener("click", () => {
+        promptNote(lastFinishedEntry(activeSeries()));
+      });
 
       function renderLastFeed(now) {
         const box = $("lastFeed");
@@ -978,7 +1020,6 @@
           }
 
           // v19: "zurück" exakt wie "vor" sperren, sobald am Datenanfang angekommen.
-          $("panBack").disabled = left <= dataStart + 1000 || viewRight === null && left <= dataStart + 1000;
           $("panBack").disabled = (right - span) <= dataStart + 1000;
           $("panForward").disabled = viewRight === null;
 
@@ -1218,7 +1259,10 @@
               ${entry.note ? `<div class="feed-detail feed-note">📝 ${escapeHtml(entry.note)}</div>` : ""}
             </div>
             ${isCurrentView()
-              ? `<button class="delete-button" type="button" data-delete="${entry.start}">Löschen</button>`
+              ? `<div class="row-buttons">
+                   <button class="note-button" type="button" data-note="${entry.start}">Notiz</button>
+                   <button class="delete-button" type="button" data-delete="${entry.start}">Löschen</button>
+                 </div>`
               : ""}
           </div>
         `).join("");
@@ -1232,6 +1276,16 @@
             session.entries = session.entries.filter(e => e.start !== start);
             scheduleSave();
             renderFeed(Date.now());
+          });
+        });
+
+        // v20: Notiz nachträglich pro Eintrag
+        list.querySelectorAll("[data-note]").forEach(button => {
+          button.addEventListener("click", () => {
+            const start = Number(button.dataset.note);
+            const session = activeSeries();
+            const entry = entries(session).find(e => e.start === start);
+            promptNote(entry);
           });
         });
       }
@@ -1263,9 +1317,12 @@
                 <div class="feed-title">${dateTime(session.startedAt)}</div>
                 <div class="feed-detail">${label} · ${entries(session).length} Stillzeiten · ${split}</div>
               </div>
-              <button class="history-button" type="button" data-open="${session.id}" ${isSelected ? "disabled" : ""}>
-                ${isSelected ? "Angezeigt" : "Öffnen"}
-              </button>
+              <div class="row-buttons">
+                <button class="history-button" type="button" data-open="${session.id}" ${isSelected ? "disabled" : ""}>
+                  ${isSelected ? "Angezeigt" : "Öffnen"}
+                </button>
+                <button class="delete-button" type="button" data-del-series="${session.id}">Löschen</button>
+              </div>
             </div>
           `;
         }).join("");
@@ -1284,6 +1341,42 @@
             renderFeed(Date.now());
           });
         });
+
+        // v20: Messreihen löschen (analog Wellen-Tracker)
+        list.querySelectorAll("[data-del-series]").forEach(button => {
+          button.addEventListener("click", () => deleteSeries(button.dataset.delSeries));
+        });
+      }
+
+      function deleteSeries(id) {
+        const session = series.find(s => s.id === id);
+        if (!session) return;
+
+        if (!confirm(
+          "Diese Messreihe (Beginn " + dateTime(session.startedAt) + ", " +
+          entries(session).length + " Stillzeiten) endgültig löschen? " +
+          "Dies kann nicht rückgängig gemacht werden."
+        )) return;
+
+        const wasCurrent = id === currentId;
+        series = series.filter(s => s.id !== id);
+
+        if (wasCurrent) {
+          if (!series.length) {
+            const fresh = makeSeries();
+            series.push(fresh);
+            currentId = fresh.id;
+          } else {
+            // Jüngste verbleibende Reihe wird zur aktiven
+            currentId = [...series].sort((a, b) => b.startedAt - a.startedAt)[0].id;
+          }
+        }
+        if (selectedId === id) selectedId = currentId;
+
+        hideTapDetail();
+        applyViewState(activeSeries());
+        scheduleSave();
+        renderFeed(Date.now());
       }
 
       /* ============ Zeitraum, Zoom, Navigation ============ */
@@ -1420,7 +1513,7 @@
 
         const active = activeFeed();
         $("feedHint").textContent = active
-          ? "Seitenwechsel während des Stillens teilt die Aufzeichnung automatisch."
+          ? "Timer antippen: Notiz erfassen · Seitenwechsel im Stillen teilt die Aufzeichnung automatisch."
           : "Seite wählen, dann starten. Seitenwechsel mitten im Stillen wird automatisch gesplittet.";
 
         renderLastFeed(now);
