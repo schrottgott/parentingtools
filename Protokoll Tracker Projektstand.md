@@ -16,8 +16,9 @@ Beide laufen als einzelne HTML-Datei im Browser, Daten liegen ausschließlich im
 
 ---
 
-## Aktueller Stand Still-Tracker (v20, 11.11.2026)
+## Aktueller Stand Still-Tracker (v21, 14.11.2026)
 
+- „Dark Mode in beiden Trackern, v21/v10"
 - **Messreihen:** Fortführung über Browser-Neustarts hinweg; nur „Messreihe beenden" schließt eine Reihe. Jede gespeicherte Reihe wird über „Öffnen" sofort zur aktiven Reihe (egal ob vorher beendet) und ist sofort weitermessbar. „Neue Messreihe starten", Löschen einzelner Reihen in der Historie (mit Bestätigung).
 - **Stillzeiten:** Start/Beenden über Hauptbutton, Seitenwahl Links/Rechts, Seitenwechsel mitten im Stillen splittet den Eintrag automatisch. Einstellung „Nach dem Stillen die Seite …" (automatisch wechseln / nicht ändern).
 - **Notizen (v19/v20):** Pro Eintrag; erfassbar per Antippen der „Zuletzt"-Box, per Antippen des **laufenden Timers** (Notiz zur laufenden Stillzeit) und nachträglich per „Notiz"-Button in der Stillzeiten-Liste. Anzeige in Box, Liste, Zeitstrahl-Detail; Bestandteil des Backups.
