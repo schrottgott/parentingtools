@@ -3,18 +3,19 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-  <meta name="theme-color" content="#f6eee7">
+  <meta name="theme-color" content="#f6eee7" id="metaThemeColor">
   <title>Still-Tracker</title>
   <!--
     ============================================================
-    Still-Tracker · Version 20
+    Still-Tracker · Version 21 (Dark Mode)
     Datum: 11.11.2026
     Entwickelt von: Lumo (Proton) im Auftrag der Nutzerin/des Nutzers
-    Neu in v20 (aufbauend auf v19):
-    - Notiz auch zur LAUFenden Stillzeit: Timer-Kasten antippen
-    - Messreihen in der Historie löschen (analog Wellen-Tracker)
-    - Notizen nachträglich pro Eintrag in der Stillzeiten-Liste
-      anlegen/ändern/löschen
+    Neu in v21 (aufbauend auf v20):
+    - Dark Mode mit 3 Modi: Manuell (Standard), Zeitfenster, OS folgen
+    - Schnellumschalter (Mond/Sonne) im Kopf, immer erreichbar
+    - Sanfter Farbwechsel (Transition) statt abruptem Umsprung
+    - Zeitstrahl und alle Elemente folgen dem Theme
+    - Theme-Einstellung wird gespeichert und im Backup mitgeführt
     ============================================================
   -->
   <style>
@@ -27,11 +28,51 @@
       --line: #eaded5;
       --left: #bd6553;
       --left-bg: #f9ede9;
+      --left-border: #e8cbc3;
       --right: #d9b989;
       --right-strong: #cfa75f;
       --right-ink: #5f4c22;
       --right-bg: #faf3e7;
+      --right-border: #e8dcc4;
       --accent: #9d7650;
+      --surface: #fffdfb;       /* Graph, Listenzeilen */
+      --soft: #f7eee7;          /* Timer-Kasten, Gesamt-Statistik */
+      --btn-bg: white;
+      --danger-border: #d8b8ae;
+      --danger-bg: #fff5f2;
+      --danger-ink: #8b3e31;
+      --danger-running: #8b3e31;
+      --backdrop: #342a2788;
+      --shadow-card: #4a30200a;
+      --shadow-pop: #4a302033;
+    }
+
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --bg: #1c1714;
+      --card: #29221e;
+      --ink: #f0e7df;
+      --muted: #a3938a;
+      --line: #3d342e;
+      --left: #c97a67;
+      --left-bg: #3a2b26;
+      --left-border: #553d36;
+      --right: #d9b989;
+      --right-strong: #d8b070;
+      --right-ink: #2e2513;
+      --right-bg: #352c20;
+      --right-border: #554730;
+      --accent: #b08863;
+      --surface: #211b17;
+      --soft: #241d19;
+      --btn-bg: #332b26;
+      --danger-border: #5d423b;
+      --danger-bg: #3a2723;
+      --danger-ink: #e8a596;
+      --danger-running: #a04c3d;
+      --backdrop: #000000aa;
+      --shadow-card: #00000033;
+      --shadow-pop: #00000066;
     }
 
     * { box-sizing: border-box; }
@@ -45,28 +86,41 @@
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     }
 
-    #saveWarning {
-      display: none;
-      margin: 0;
-      padding: 12px 16px;
-      background: #ffe1db;
-      color: #8b1f0e;
-      font-size: .85rem;
-      line-height: 1.5;
-      border-bottom: 2px solid #d95f49;
+    /* v21: sanfter Theme-Übergang statt abruptem Umsprung */
+    body, .card, .live-timer, button, select, input, dialog, textarea,
+    .feed-row, .graph-wrap, .stat, .last-feed, .tap-detail, .help-head,
+    .help-close, dialog::backdrop, .live-note {
+      transition: background-color .45s ease, border-color .45s ease,
+                  color .45s ease, box-shadow .45s ease;
     }
 
     main { width: min(100%, 560px); margin: 0 auto; padding: 26px 18px 38px; }
-    header { margin-bottom: 18px; text-align: center; }
+    header { margin-bottom: 18px; text-align: center; position: relative; }
     h1 { margin: 0 0 16px; font-size: 1.6rem; }
     .muted { color: var(--muted); }
+
+    /* v21: Schnellumschalter hell/dunkel */
+    .theme-quick {
+      position: absolute;
+      top: -2px;
+      right: 0;
+      min-width: 46px;
+      min-height: 46px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 13px;
+      background: var(--btn-bg);
+      color: var(--ink);
+      font-size: 1.15rem;
+      line-height: 1;
+    }
 
     .card {
       padding: 20px;
       border: 1px solid var(--line);
       border-radius: 21px;
       background: var(--card);
-      box-shadow: 0 8px 24px #4a30200a;
+      box-shadow: 0 8px 24px var(--shadow-card);
     }
 
     button, select, input { font: inherit; }
@@ -83,13 +137,13 @@
       margin-bottom: 14px;
       padding: 12px;
       border-radius: 13px;
-      background: #f7eee7;
+      background: var(--soft);
       border: 1px solid var(--line);
     }
 
     .live-timer.recording {
       background: var(--left-bg);
-      border-color: #e8cbc3;
+      border-color: var(--left-border);
     }
 
     .live-timer.tappable { cursor: pointer; }
@@ -145,13 +199,13 @@
       font-size: 1.15rem;
     }
 
-    .big-toggle.running { background: #8b3e31; }
+    .big-toggle.running { background: var(--danger-running); }
 
     .last-feed {
       margin-top: 14px;
       padding: 12px 14px;
       border-radius: 13px;
-      box-shadow: 0 6px 18px #4a302033;
+      box-shadow: 0 6px 18px var(--shadow-pop);
       font-size: .9rem;
       line-height: 1.55;
       text-align: center;
@@ -159,7 +213,7 @@
     }
 
     .last-feed.side-left { background: var(--left); color: white; }
-    .last-feed.side-right { background: var(--right-strong); color: #3f3212; }
+    .last-feed.side-right { background: var(--right-strong); color: var(--right-ink); }
 
     .last-feed strong { font-size: .98rem; display: block; margin-bottom: 2px; }
     .last-feed .feed-note {
@@ -174,9 +228,9 @@
 
     .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .stat { padding: 11px 6px; border-radius: 13px; }
-    .stat.stat-left { background: var(--left-bg); border: 1px solid #e8cbc3; }
-    .stat.stat-right { background: var(--right-bg); border: 1px solid #e8dcc4; }
-    .stat.stat-total { background: #f7eee7; border: 1px solid var(--line); grid-column: 1 / -1; }
+    .stat.stat-left { background: var(--left-bg); border: 1px solid var(--left-border); }
+    .stat.stat-right { background: var(--right-bg); border: 1px solid var(--right-border); }
+    .stat.stat-total { background: var(--soft); border: 1px solid var(--line); grid-column: 1 / -1; }
     .stat span { display: block; color: var(--muted); font-size: .74rem; }
     .stat strong { display: block; margin-top: 4px; font-size: 1rem; font-variant-numeric: tabular-nums; }
 
@@ -186,7 +240,7 @@
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 14px;
-      background: #fffdfb;
+      background: var(--surface);
       overflow: hidden;
       cursor: pointer;
     }
@@ -204,7 +258,7 @@
       padding: 5px 12px;
       border: 1px solid var(--line);
       border-radius: 11px;
-      background: white;
+      background: var(--btn-bg);
       color: var(--ink);
       font-size: .86rem;
     }
@@ -219,13 +273,13 @@
       margin: 10px 2px 2px;
       padding: 12px 14px;
       border-radius: 12px;
-      box-shadow: 0 6px 18px #4a302033;
+      box-shadow: 0 6px 18px var(--shadow-pop);
       font-size: .88rem;
       line-height: 1.5;
     }
 
     .tap-detail.side-left { background: var(--left); color: white; }
-    .tap-detail.side-right { background: var(--right-strong); color: #3f3212; }
+    .tap-detail.side-right { background: var(--right-strong); color: var(--right-ink); }
     .tap-detail .tap-title { font-weight: 700; font-size: .97rem; }
 
     .tap-detail .tap-close {
@@ -251,11 +305,11 @@
       padding: 12px;
       border: 1px solid var(--line);
       border-radius: 13px;
-      background: #fffdfb;
+      background: var(--surface);
     }
 
-    .feed-row.side-left { border-color: #e8cbc3; background: var(--left-bg); }
-    .feed-row.side-right { border-color: #e8dcc4; background: var(--right-bg); }
+    .feed-row.side-left { border-color: var(--left-border); background: var(--left-bg); }
+    .feed-row.side-right { border-color: var(--right-border); background: var(--right-bg); }
 
     .side-badge {
       display: inline-block;
@@ -268,7 +322,7 @@
     }
 
     .side-left .side-badge { background: var(--left); color: white; }
-    .side-right .side-badge { background: var(--right-strong); color: #3f3212; }
+    .side-right .side-badge { background: var(--right-strong); color: var(--right-ink); }
 
     .feed-info { min-width: 0; }
     .feed-title { font-weight: 650; }
@@ -283,12 +337,12 @@
       padding: 6px 10px;
       border: 1px solid var(--line);
       border-radius: 10px;
-      background: white;
+      background: var(--btn-bg);
       color: var(--ink);
       font-size: .84rem;
     }
 
-    .note-button { border-color: #d8c9ae; background: #fdf8ee; }
+    .note-button { border-color: var(--accent); }
 
     .empty { padding: 12px 0; color: var(--muted); text-align: center; font-size: .9rem; }
     .note { margin: 18px 2px 0; color: var(--muted); font-size: .79rem; line-height: 1.5; }
@@ -300,29 +354,32 @@
       gap: 12px;
     }
 
+    .setting-row + .setting-row { margin-top: 10px; }
     .setting-row p { margin: 0; font-size: .92rem; }
 
-    .setting-row select {
+    .setting-row select, .setting-row input[type="time"] {
       min-height: 42px;
       padding: 4px 10px;
       border: 1px solid var(--line);
       border-radius: 11px;
-      background: white;
+      background: var(--btn-bg);
       color: var(--ink);
     }
+
+    #themeWindowRow[hidden] { display: none !important; }
 
     .action-button {
       width: 100%;
       min-height: 50px;
       margin-top: 12px;
-      border: 1px solid #d8b8ae;
+      border: 1px solid var(--danger-border);
       border-radius: 14px;
-      background: #fff5f2;
-      color: #8b3e31;
+      background: var(--danger-bg);
+      color: var(--danger-ink);
       font-weight: 650;
     }
 
-    .action-button.secondary { border-color: var(--line); background: white; color: var(--ink); }
+    .action-button.secondary { border-color: var(--line); background: var(--btn-bg); color: var(--ink); }
     .backup-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
 
     dialog {
@@ -335,7 +392,7 @@
       color: var(--ink);
     }
 
-    dialog::backdrop { background: #342a2788; }
+    dialog::backdrop { background: var(--backdrop); }
 
     .help-head {
       position: sticky;
@@ -355,7 +412,7 @@
       padding: 4px 14px;
       border: 1px solid var(--line);
       border-radius: 10px;
-      background: white;
+      background: var(--btn-bg);
       color: var(--ink);
     }
 
@@ -375,11 +432,12 @@
   </style>
 </head>
 <body>
-  <div id="saveWarning" role="alert"></div>
+  <div id="saveWarning" role="alert" style="display:none;margin:0;padding:12px 16px;background:#ffe1db;color:#8b1f0e;font-size:.85rem;line-height:1.5;border-bottom:2px solid #d95f49;"></div>
 
   <main>
     <header>
       <h1>Still-Tracker</h1>
+      <button class="theme-quick" id="themeQuick" type="button" title="Hell/Dunkel umschalten">🌙</button>
     </header>
 
     <div class="viewing-banner" id="viewingBanner" hidden></div>
@@ -444,6 +502,21 @@
           <option value="on">automatisch wechseln</option>
           <option value="off">nicht ändern</option>
         </select>
+      </div>
+      <div class="setting-row">
+        <p>Farbschema</p>
+        <select id="themeMode">
+          <option value="manual">manuell umschalten</option>
+          <option value="window">nach Zeitfenster</option>
+          <option value="os">wie System/Browser</option>
+        </select>
+      </div>
+      <div class="setting-row" id="themeWindowRow" hidden>
+        <p>Dunkel von … bis …</p>
+        <span style="display:flex;gap:6px;align-items:center">
+          <input type="time" id="themeStart" value="20:00">
+          <input type="time" id="themeEnd" value="07:00">
+        </span>
       </div>
     </section>
 
@@ -510,7 +583,15 @@
         <li><strong>Während des Stillens:</strong> Tippe auf den Timer-Kasten oben, um eine Notiz zur laufenden Stillzeit zu erfassen. Sie wandert beim Beenden automatisch mit dem Eintrag mit.</li>
         <li><strong>Nach dem Stillen:</strong> Tippe auf die „Zuletzt"-Box unter dem Start-Button, um eine Notiz zur letzten Stillzeit zu erfassen oder zu ändern.</li>
         <li><strong>Nachträglich:</strong> Jede Stillzeit in der Liste unten hat einen „Notiz"-Button. Leeres Feld + OK entfernt die Notiz wieder.</li>
-        <li>Notizen werden in der Box, in der Liste, im Zeitstrahl-Detail und im Backup gespeichert.</li>
+      </ul>
+
+      <h4>Farbschema (hell/dunkel)</h4>
+      <ul>
+        <li><strong>Manuell:</strong> Umschalten über den Mond/Sonne-Button oben rechts oder unter Einstellungen. Das ist der Standard.</li>
+        <li><strong>Zeitfenster:</strong> Dunkel automatisch in einem Zeitraum (z. B. 20:00–07:00, auch über Mitternacht möglich), sonst hell.</li>
+        <li><strong>Wie System/Browser:</strong> Folgt der Hell/Dunkel-Einstellung deines Geräts, auch bei later Änderungen.</li>
+        <li>Der Mond/Sonne-Button wirkt in jedem Modus: ein Tipp schaltet sofort um und stellt gleichzeitig auf „manuell" um.</li>
+        <li>Der Wechsel erfolgt weich überblendet statt abrupt.</li>
       </ul>
 
       <h4>Zeitstrahl</h4>
@@ -521,21 +602,16 @@
         <li>Der Zoom- und Blickzustand wird pro Messreihe gemerkt und beim erneuten Öffnen wiederhergestellt.</li>
       </ul>
 
-      <h4>Statistik</h4>
-      <p>Zeigt für heute die Stillzeiten links und rechts sowie eine Gesamtbilanz.</p>
-
       <h4>Messreihen</h4>
       <ul>
         <li>Das Schließen des Browsers oder der Seite beendet <strong>keine</strong> Messreihe – beim nächsten Öffnen wird die aktuelle Reihe automatisch fortgeführt, auch eine laufende Stillzeit läuft weiter.</li>
-        <li>Jede gespeicherte Reihe lässt sich über „Öffnen" ansehen und wird dabei sofort wieder zur aktuellen Messreihe – egal ob sie vorher beendet wurde oder nicht. Direkt danach kann in ihr weitergemessen werden.</li>
+        <li>Jede gespeicherte Reihe lässt sich über „Öffnen" ansehen und wird dabei sofort wieder zur aktuellen Messreihe – egal ob sie vorher beendet wurde oder nicht.</li>
         <li>Jede Reihe in der Historie kann über „Löschen" endgültig entfernt werden (mit Bestätigung).</li>
-        <li>„Messreihe beenden" schließt die aktuelle Aufzeichnung ab; sie bleibt in der Historie.</li>
-        <li>„Neue Messreihe starten" beginnt eine frische Aufzeichnung; alte Reihen bleiben erhalten.</li>
         <li><strong>Speichern:</strong> Jede Änderung wird sofort gespeichert – zusätzlich auch beim Verbergen oder Schließen der Seite/App. Falls das Speichern verweigert wird (z. B. Privatmodus), erscheint oben eine deutliche Warnung.</li>
       </ul>
 
       <h4>Sicherung</h4>
-      <p>Mit „Sicherung exportieren" speicherst du alle Daten als JSON-Datei (Notizen eingeschlossen), mit „Sicherung importieren" stellst du sie wieder her (überschreibt die aktuellen Daten).</p>
+      <p>Mit „Sicherung exportieren" speicherst du alle Daten als JSON-Datei (Notizen und Farbschema-Einstellung eingeschlossen), mit „Sicherung importieren" stellst du sie wieder her (überschreibt die aktuellen Daten).</p>
     </div>
   </dialog>
 
@@ -550,11 +626,14 @@
 
       /* ============ Zustand ============ */
 
-      let currentSide = "left"; // Seite, die als nächstes gestartet wird
+      let currentSide = "left";
       let series = [];
       let currentId = null;
       let selectedId = null;
       let autoSwitch = "on";
+
+      // v21: Theme-Zustand (manuell | window | os)
+      let theme = { mode: "os", dark: false, start: "20:00", end: "07:00" };
 
       let viewSpanHours = 12;
       let viewRight = null;
@@ -575,28 +654,23 @@
       }
 
       function persistState() {
-        // Ansichtszustand der aktuellen Reihe mitspeichern
         try {
           const session = activeSeries();
           if (session) {
             session.view = {
               span: viewSpanHours,
               zoom: zoomSpanHours,
-              // Position relativ zur Jetzt-Zeit merken, damit sie beim späteren
-              // Öffnen noch Sinn ergibt
               rightAgo: viewRight === null ? null : Date.now() - viewRight
             };
           }
           localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            currentSide, series, currentId, autoSwitch
+            currentSide, series, currentId, autoSwitch, theme
           }));
         } catch (error) {
           showSaveWarning(error && error.name ? error.name : "unbekannter Fehler");
         }
       }
 
-      // v18: Sofortiges Speichern bei JEDER Änderung (kein Debounce),
-      // zusätzlich sichert der Ereignis-Block unten beim Verbergen/Schließen.
       function scheduleSave() {
         persistState();
       }
@@ -617,7 +691,6 @@
         return entries(activeSeries()).find(e => e.end === null) || null;
       }
 
-      // Ansichtszustand einer Reihe anwenden (Zoom + Buttons synchronisieren)
       function applyViewState(session) {
         const v = session?.view;
         if (v && Number.isFinite(v.span) && v.span > 0) {
@@ -688,7 +761,73 @@
           .replaceAll(">", "&gt;");
       }
 
-      /* ============ Notizen (v19/v20) ============ */
+      /* ============ Theme (v21) ============ */
+
+      const LIGHT_THEME_COLOR = "#f6eee7";
+      const DARK_THEME_COLOR = "#1c1714";
+
+      function minutesOf(hhmm) {
+        const parts = String(hhmm || "").split(":");
+        const h = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
+        if (!Number.isFinite(h) || !Number.isFinite(m)) return null;
+        return h * 60 + m;
+      }
+
+      function inWindow(now) {
+        const cur = now.getHours() * 60 + now.getMinutes();
+        const s = minutesOf(theme.start), e = minutesOf(theme.end);
+        if (s === null || e === null || s === e) return false;
+        // Fenster über Mitternacht (z. B. 20:00–07:00)
+        return s < e ? (cur >= s && cur < e) : (cur >= s || cur < e);
+      }
+
+      const osDarkQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+      function themeShouldBeDark(now) {
+        if (theme.mode === "os") return osDarkQuery ? osDarkQuery.matches : false;
+        if (theme.mode === "window") return inWindow(now);
+        return theme.dark;
+      }
+
+      function applyTheme(forceRedraw) {
+        const dark = themeShouldBeDark(new Date());
+        document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+        $("metaThemeColor").setAttribute("content", dark ? DARK_THEME_COLOR : LIGHT_THEME_COLOR);
+        $("themeQuick").textContent = dark ? "☀️" : "🌙";
+        $("themeQuick").title = dark ? "Helles Design aktivieren" : "Dunkles Design aktivieren";
+        if (forceRedraw) drawTimeline(Date.now());
+      }
+
+      function setThemeMode(mode) {
+        theme.mode = mode;
+        if (mode === "manual") theme.dark = document.documentElement.getAttribute("data-theme") === "dark";
+        $("themeMode").value = mode;
+        $("themeWindowRow").hidden = mode !== "window";
+        applyTheme(true);
+        scheduleSave();
+      }
+
+      $("themeQuick").addEventListener("click", () => {
+        // Sofort umschalten und auf manuell umstellen (dauerhaftes Übersteuern)
+        const dark = document.documentElement.getAttribute("data-theme") === "dark";
+        theme.mode = "manual";
+        theme.dark = !dark;
+        $("themeMode").value = "manual";
+        $("themeWindowRow").hidden = true;
+        applyTheme(true);
+        scheduleSave();
+      });
+
+      $("themeMode").addEventListener("change", () => setThemeMode($("themeMode").value));
+      $("themeStart").addEventListener("change", () => { theme.start = $("themeStart").value; applyTheme(true); scheduleSave(); });
+      $("themeEnd").addEventListener("change", () => { theme.end = $("themeEnd").value; applyTheme(true); scheduleSave(); });
+      if (osDarkQuery) {
+        const handler = () => { if (theme.mode === "os") applyTheme(true); };
+        if (osDarkQuery.addEventListener) osDarkQuery.addEventListener("change", handler);
+        else if (osDarkQuery.addListener) osDarkQuery.addListener(handler);
+      }
+
+      /* ============ Notizen ============ */
 
       function promptNote(entry) {
         if (!entry) return;
@@ -697,7 +836,7 @@
           `Notiz zur Stillzeit (${when}):\n(Leer lassen und OK = Notiz löschen)`,
           entry.note || ""
         );
-        if (input === null) return; // Abbruch
+        if (input === null) return;
         entry.note = input.trim();
         scheduleSave();
         renderFeed(Date.now());
@@ -711,7 +850,6 @@
         if (e.end !== null && !Number.isFinite(e.end)) return null;
         return {
           side: e.side, start: e.start, end: e.end,
-          // v19: Notiz zum Eintrag (optional, bleibt über Migrationen erhalten)
           note: typeof e.note === "string" ? e.note : ""
         };
       }
@@ -732,6 +870,14 @@
         return { sessions, current };
       }
 
+      function loadTheme(raw) {
+        if (!raw || typeof raw !== "object") return;
+        if (["manual", "window", "os"].includes(raw.mode)) theme.mode = raw.mode;
+        theme.dark = Boolean(raw.dark);
+        if (typeof raw.start === "string" && /^\d{2}:\d{2}$/.test(raw.start)) theme.start = raw.start;
+        if (typeof raw.end === "string" && /^\d{2}:\d{2}$/.test(raw.end)) theme.end = raw.end;
+      }
+
       function loadAll() {
         let data = null;
         try {
@@ -739,8 +885,6 @@
           if (raw) data = JSON.parse(raw);
         } catch { data = null; }
 
-        // Migration von älteren Versionen (Mehrlinge / Original):
-        // Einträge werden ohne Kindzuordnung übernommen.
         if (!data || !Array.isArray(data.series)) {
           for (const key of LEGACY_KEYS) {
             try {
@@ -757,8 +901,8 @@
                 data.series[0].entries = migrated;
                 if (legacy.currentSide) currentSide = legacy.currentSide;
                 if (legacy.autoSwitch === "off") autoSwitch = "off";
+                loadTheme(legacy.theme);
                 if (Array.isArray(legacy.series) && legacy.series.length > 1) {
-                  // Weitere Reihen ebenfalls flach übernehmen
                   for (let i = 1; i < legacy.series.length; i++) {
                     const s = legacy.series[i];
                     data.series.push({
@@ -784,12 +928,12 @@
             currentSide = data.currentSide;
           }
           if (data.autoSwitch === "off") autoSwitch = "off";
+          loadTheme(data.theme);
           const norm = normalizeSessions(data.series, data.currentId);
           series = norm.sessions;
           currentId = norm.current;
         }
 
-        // Offene Messreihe fortsetzen – nur wenn es gar keine gibt, eine neue anlegen.
         if (!activeSeries()) {
           const fresh = makeSeries();
           series.push(fresh);
@@ -798,13 +942,17 @@
 
         selectedId = currentId;
         $("autoSwitch").value = autoSwitch;
+        $("themeMode").value = theme.mode;
+        $("themeStart").value = theme.start;
+        $("themeEnd").value = theme.end;
+        $("themeWindowRow").hidden = theme.mode !== "window";
         applyViewState(activeSeries());
+        applyTheme(false);
         persistState();
       }
 
       /* ============ Kernlogik ============ */
 
-      // Seitenwechsel während laufender Stillzeit → Split.
       function setSide(side) {
         const session = activeSeries();
         if (session && isCurrentView()) {
@@ -828,7 +976,6 @@
         const active = activeFeed();
         if (active) {
           active.end = Date.now();
-          // Für die nächste Stillzeit ggf. automatisch die Gegenseite vorschlagen
           if (autoSwitch === "on") {
             currentSide = active.side === "left" ? "right" : "left";
           }
@@ -858,16 +1005,12 @@
         $("sideLeft").disabled = !isCurrentView();
         $("sideRight").disabled = !isCurrentView();
 
-        // Großer Timer oben
         const timerBox = $("liveTimer");
         if (isCurrentView()) {
           timerBox.hidden = false;
           timerBox.classList.toggle("recording", Boolean(active));
-          // v20: Antippen im laufenden Stillen → Notiz erfassen
           timerBox.classList.toggle("tappable", Boolean(active));
-          timerBox.title = active
-            ? "Antippen: Notiz zur laufenden Stillzeit"
-            : "";
+          timerBox.title = active ? "Antippen: Notiz zur laufenden Stillzeit" : "";
           $("liveStatus").textContent = active
             ? `Aufzeichnung läuft · ${active.side === "left" ? "Links" : "Rechts"}${active.note ? " · 📝" : ""}`
             : "Bereit";
@@ -890,7 +1033,6 @@
       $("sideRight").addEventListener("click", () => setSide("right"));
       $("bigToggle").addEventListener("click", toggleFeed);
 
-      // v20: Notiz zur laufenden Stillzeit
       $("liveTimer").addEventListener("click", () => {
         const active = activeFeed();
         if (active && isCurrentView()) promptNote(active);
@@ -933,6 +1075,21 @@
       const graph = $("feedGraph");
       const gctx = graph.getContext("2d");
 
+      // v21: Canvas-Farben aus dem aktuellen Theme lesen
+      function themeColors() {
+        const cs = getComputedStyle(document.documentElement);
+        const get = (name, fallback) => cs.getPropertyValue(name).trim() || fallback;
+        return {
+          bg: get("--surface", "#fffdfb"),
+          grid: get("--line", "#eaded5"),
+          text: get("--muted", "#796b65"),
+          mid: get("--line", "#eaded5"),
+          label: get("--muted", "#796b65"),
+          left: get("--left", "#bd6553"),
+          right: get("--right-strong", "#cfa75f")
+        };
+      }
+
       function fillRoundRect(ctx, x, y, w, h, r) {
         r = Math.min(r, w / 2, h / 2);
         ctx.beginPath();
@@ -967,17 +1124,10 @@
 
         let candidate = base - direction * span;
 
-        // v19: Blättern niemals in datenlose Bereiche – der linke Rand des
-        // Fensters bleibt mindestens am frühesten vorhandenen Eintrag.
         const dataStart = dataStartTime(selectedSeries());
-        const earliestRight = dataStart + span; // kleiner geht nicht: left = right - span >= dataStart
+        const earliestRight = dataStart + span;
         candidate = Math.max(candidate, earliestRight);
-
-        // Und nie über die Gegenwart hinaus.
         candidate = Math.min(candidate, now);
-
-        // Wenn auch bei "ganz rechts" kein sinnvoller Ausschnitt bleibt
-        // (z. B. gesamte Datenmenge kürzer als das Fenster), leben lassen.
         viewRight = candidate >= now - 1000 ? null : candidate;
 
         hideTapDetail();
@@ -993,13 +1143,14 @@
 
       function drawTimeline(now) {
         try {
+          const tc = themeColors();
           const rect = graph.getBoundingClientRect();
           const w = rect.width;
           const h = rect.height;
           if (!w || !h) return;
 
           gctx.clearRect(0, 0, w, h);
-          gctx.fillStyle = "#fffdfb";
+          gctx.fillStyle = tc.bg;
           gctx.fillRect(0, 0, w, h);
 
           const session = selectedSeries();
@@ -1019,7 +1170,6 @@
               `Ansicht: ${dayLabel(left)} ${timeOfDay(left)} – ${dayLabel(right)} ${timeOfDay(right)} Uhr`;
           }
 
-          // v19: "zurück" exakt wie "vor" sperren, sobald am Datenanfang angekommen.
           $("panBack").disabled = (right - span) <= dataStart + 1000;
           $("panForward").disabled = viewRight === null;
 
@@ -1037,7 +1187,7 @@
             : 12 * HOUR;
           const firstTick = Math.ceil(left / stepMs) * stepMs;
 
-          gctx.strokeStyle = "#eee4dc";
+          gctx.strokeStyle = tc.grid;
           gctx.lineWidth = 1;
           gctx.font = "10px system-ui, sans-serif";
           gctx.textAlign = "center";
@@ -1051,7 +1201,7 @@
             gctx.lineTo(x, h - padB);
             gctx.stroke();
 
-            gctx.fillStyle = "#796b65";
+            gctx.fillStyle = tc.text;
             gctx.fillText(timeOfDay(t), x, h - padB + 14);
 
             const date = new Date(t);
@@ -1061,7 +1211,7 @@
           }
 
           if (!visible.length) {
-            gctx.fillStyle = "#796b65";
+            gctx.fillStyle = tc.text;
             gctx.font = "14px system-ui, sans-serif";
             gctx.textAlign = "center";
             gctx.fillText(
@@ -1074,13 +1224,13 @@
           const midY = (padT + (h - padB - 4)) / 2;
           const half = (midY - padT);
 
-          gctx.strokeStyle = "#eaded5";
+          gctx.strokeStyle = tc.mid;
           gctx.beginPath();
           gctx.moveTo(padL, midY);
           gctx.lineTo(w - padR, midY);
           gctx.stroke();
 
-          gctx.fillStyle = "#a89a92";
+          gctx.fillStyle = tc.label;
           gctx.font = "10px system-ui, sans-serif";
           gctx.textAlign = "left";
           gctx.fillText("Links ▲", padL + 2, midY - 4);
@@ -1127,7 +1277,7 @@
           }
 
           for (const t of tapTargets) {
-            gctx.fillStyle = t.side === "left" ? "#bd6553" : "#cfa75f";
+            gctx.fillStyle = t.side === "left" ? tc.left : tc.right;
             fillRoundRect(gctx, t.x, t.y, t.w, t.h, 5);
           }
         } catch (error) {
@@ -1279,7 +1429,6 @@
           });
         });
 
-        // v20: Notiz nachträglich pro Eintrag
         list.querySelectorAll("[data-note]").forEach(button => {
           button.addEventListener("click", () => {
             const start = Number(button.dataset.note);
@@ -1331,18 +1480,16 @@
           button.addEventListener("click", () => {
             const session = series.find(s => s.id === button.dataset.open);
             if (!session) return;
-            // Geöffnete Reihe wird zur aktiven Messreihe – egal ob beendet oder nicht.
             session.finished = false;
             currentId = session.id;
             selectedId = session.id;
             hideTapDetail();
-            applyViewState(session); // letztes Zoom-/Blickfenster wiederherstellen
+            applyViewState(session);
             scheduleSave();
             renderFeed(Date.now());
           });
         });
 
-        // v20: Messreihen löschen (analog Wellen-Tracker)
         list.querySelectorAll("[data-del-series]").forEach(button => {
           button.addEventListener("click", () => deleteSeries(button.dataset.delSeries));
         });
@@ -1367,7 +1514,6 @@
             series.push(fresh);
             currentId = fresh.id;
           } else {
-            // Jüngste verbleibende Reihe wird zur aktiven
             currentId = [...series].sort((a, b) => b.startedAt - a.startedAt)[0].id;
           }
         }
@@ -1457,99 +1603,131 @@
       /* ============ Export / Import ============ */
 
       $("exportData").addEventListener("click", () => {
-        persistState();
-        const payload = JSON.stringify({ currentSide, series, currentId, autoSwitch }, null, 2);
-        const blob = new Blob([payload], { type: "application/json" });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `still-tracker-backup-${new Date().toISOString().slice(0, 10)}.json`;
-        link.click();
-        URL.revokeObjectURL(url);
+        try {
+          const payload = {
+            app: "still-tracker",
+            version: 3,
+            exportedAt: new Date().toISOString(),
+            currentSide, autoSwitch, theme,
+            series, currentId
+          };
+          const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = "still-tracker-backup-" +
+            new Date().toISOString().slice(0, 10) + ".json";
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 5000);
+        } catch (error) {
+          alert("Der Export ist fehlgeschlagen: " + error.message);
+        }
       });
 
       $("importData").addEventListener("click", () => $("importFile").click());
 
       $("importFile").addEventListener("change", event => {
-        const file = event.target.files[0];
+        const file = event.target.files && event.target.files[0];
+        event.target.value = "";
         if (!file) return;
 
         const reader = new FileReader();
         reader.onload = () => {
           try {
             const data = JSON.parse(reader.result);
-            if (!data || !Array.isArray(data.series)) {
-              alert("Diese Datei enthält keine gültigen Still-Tracker-Daten.");
+            if (!data || data.app !== "still-tracker" || !Array.isArray(data.series)) {
+              alert("Diese Datei ist keine gültige Still-Tracker-Sicherung.");
               return;
             }
-            if (!confirm("Gespeicherte Daten mit dieser Sicherung ersetzen?")) return;
-            localStorage.setItem(STORAGE_KEY, reader.result);
-            location.reload();
-          } catch {
-            alert("Die Datei konnte nicht gelesen werden.");
+            if (!confirm(
+              "Die Sicherung (Stand " + (data.exportedAt || "unbekannt") + ") importieren? " +
+              "Die aktuellen Daten in diesem Browser werden dabei ersetzt."
+            )) return;
+
+            if (data.currentSide === "left" || data.currentSide === "right") {
+              currentSide = data.currentSide;
+            }
+            autoSwitch = data.autoSwitch === "off" ? "off" : "on";
+            theme = { mode: "manual", dark: false, start: "20:00", end: "07:00" };
+            loadTheme(data.theme);
+
+            const norm = normalizeSessions(data.series, data.currentId);
+            series = norm.sessions;
+            currentId = norm.current;
+
+            if (!activeSeries()) {
+              const fresh = makeSeries();
+              series.push(fresh);
+              currentId = fresh.id;
+            }
+            selectedId = currentId;
+
+            $("autoSwitch").value = autoSwitch;
+            $("themeMode").value = theme.mode;
+            $("themeStart").value = theme.start;
+            $("themeEnd").value = theme.end;
+            $("themeWindowRow").hidden = theme.mode !== "window";
+            applyTheme(true);
+
+            hideTapDetail();
+            applyViewState(activeSeries());
+            scheduleSave();
+            renderFeed(Date.now());
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            alert("Sicherung erfolgreich importiert.");
+          } catch (error) {
+            alert("Der Import ist fehlgeschlagen: " + error.message);
           }
         };
         reader.readAsText(file);
-        event.target.value = "";
       });
 
       /* ============ Hilfe ============ */
 
-      const helpDialog = $("helpDialog");
-      $("helpButton").addEventListener("click", () => helpDialog.showModal());
-      $("helpClose").addEventListener("click", () => helpDialog.close());
-      helpDialog.addEventListener("click", event => {
-        if (event.target === helpDialog) helpDialog.close();
+      $("helpButton").addEventListener("click", () => $("helpDialog").showModal());
+      $("helpClose").addEventListener("click", () => $("helpDialog").close());
+      $("helpDialog").addEventListener("click", event => {
+        if (event.target === $("helpDialog")) $("helpDialog").close();
       });
 
-      /* ============ Zentrales Rendering ============ */
+      /* ============ Sofortspeichern beim Schließen/Verbergen ============ */
 
-      function renderFeed(now) {
-        const session = selectedSeries();
-        const currentView = isCurrentView();
-
-        $("viewingBanner").hidden = currentView;
-        $("viewingBanner").textContent = "";
-
-        const active = activeFeed();
-        $("feedHint").textContent = active
-          ? "Timer antippen: Notiz erfassen · Seitenwechsel im Stillen teilt die Aufzeichnung automatisch."
-          : "Seite wählen, dann starten. Seitenwechsel mitten im Stillen wird automatisch gesplittet.";
-
-        renderLastFeed(now);
-        renderStats(now);
-        renderFeedList();
-        renderHistory();
-        drawTimeline(now);
-      }
-
-      window.addEventListener("resize", () => {
-        hideTapDetail();
-        resizeGraph();
-      });
-
-      /* ============ Sofortiges Sichern beim Schließen/Verbergen ============
-         Diese Ereignisse feuern zuverlässig auf allen gängigen Systemen
-         (Windows, macOS, Android, iOS), egal ob der Browser oder die
-         komplette App geschlossen, umgeschaltet oder in den Hintergrund
-         gelegt wird. So ist der Stand auch im schlimmsten Fall gesichert. */
-
-      window.addEventListener("pagehide", persistState);
-      window.addEventListener("beforeunload", persistState);
       document.addEventListener("visibilitychange", () => {
         if (document.visibilityState === "hidden") persistState();
       });
+      window.addEventListener("pagehide", persistState);
+      window.addEventListener("beforeunload", persistState);
 
       /* ============ Start ============ */
 
+      function renderFeed(now) {
+        updateControls(now);
+        renderLastFeed(now);
+        drawTimeline(now);
+        renderStats(now);
+        renderFeedList();
+        renderHistory();
+      }
+
       loadAll();
-      updateControls();
       resizeGraph();
       renderFeed(Date.now());
+
+      window.addEventListener("resize", () => {
+        resizeGraph();
+        if (openDetail) hideTapDetail();
+      });
+
       window.setInterval(() => {
-        const now = Date.now();
-        updateControls(now);
-        renderFeed(now);
+        renderFeed(Date.now());
+        // v21: Zeitfenster- und OS-Modus laufend prüfen
+        if (theme.mode !== "manual") {
+          const dark = document.documentElement.getAttribute("data-theme") === "dark";
+          const wantDark = themeShouldBeDark(new Date());
+          if (dark !== wantDark) applyTheme(true);
+        }
       }, 500);
     })();
   </script>
