@@ -1364,11 +1364,20 @@
         ensureAudioCtx();
         playReminderSound();
         alarmRinging = true;
-        if (alarmLoopTimer) clearInterval(alarmLoopTimer);
-        // Wiegenlied dauert ca. 8–9 s → alle 11 s erneut erklingen lassen
-        alarmLoopTimer = setInterval(() => {
-          if (alarmRinging) playReminderSound();
-        }, 11000);
+        if (alarmLoopTimer) { clearInterval(alarmLoopTimer); alarmLoopTimer = null; }
+        if (reminder.tone === "custom" && reminder.customData) {
+          // v25: eigener Ton läuft ganz durch – Neustart erst, wenn die
+          // Datei zu Ende ist (Geprüft alle 3 s)
+          alarmLoopTimer = setInterval(() => {
+            if (!alarmRinging) return;
+            if (customAudio && !customAudio.paused && customAudio.duration &&
+                customAudio.currentTime < customAudio.duration - 0.2) return;
+            playReminderSound();
+          }, 3000);
+        } else {
+          // Wiegenlied dauert ca. 8–9 s → alle 11 s erneut
+          alarmLoopTimer = setInterval(() => { if (alarmRinging) playReminderSound(); }, 11000);
+        }
       }
 
       function stopAllSound() {
@@ -1862,15 +1871,20 @@
 
       $("remVolume").addEventListener("input", () => {
         reminder.volume = Math.min(1, Math.max(0, Number($("remVolume").value) / 100));
+        // v25: laufende Wiedergabe sofort mitregeln
+        if (customAudio) customAudio.volume = reminder.volume;
+        if (ringMaster && audioCtx) {
+          try { ringMaster.gain.setTargetAtTime(reminder.volume, audioCtx.currentTime, 0.05); } catch { /* egal */ }
+        }
       });
       $("remVolume").addEventListener("change", () => scheduleSave());
 
       $("remTest").addEventListener("click", () => {
         if (testTimer) {
-          // Test läuft bereits → erneut antippen beendet ihn
+          // Test läuft → erneut antippen beendet ihn sofort
           clearTimeout(testTimer);
           testTimer = null;
-          stopAllSound(); 
+          stopAllSound();
           $("remTest").textContent = "Test ▶";
           return;
         }
@@ -1878,12 +1892,19 @@
         undim();
         playReminderSound();
         $("remTest").textContent = "Test ■";
-        // Nach spätestens 11 s (Wiegenlied-Ende) automatisch aufräumen
-        testTimer = setTimeout(() => {
+        const finishTest = () => {
           testTimer = null;
-          stopAllSound(); 
+          stopAllSound();
           $("remTest").textContent = "Test ▶";
-        }, 11000);
+        };
+        // Sicherheitsnetz: spätestens nach 60 s aus
+        testTimer = setTimeout(finishTest, 60000);
+        // Bei eigenem Ton: natürliches Ende der Datei beendet den Test
+        if (reminder.tone === "custom" && customAudio) {
+          customAudio.onended = () => {
+            if (testTimer) { clearTimeout(testTimer); finishTest(); }
+          };
+        }
       });
 
       /* --- Erinnerungs-Banner im Hauptbereich (auch Alarm-Quittierung) --- */
@@ -2061,7 +2082,7 @@
           <strong><i class="dot" style="background:rgba(255,255,255,.85)"></i>Zuletzt: ${last.side === "left" ? "Links" : "Rechts"}</strong>
           ${dayLabel(last.end)} · ${timeOfDay(last.end)} Uhr<br>
           Dauer: ${fmt(last.end - last.start)} <span style="opacity:.75">(${agoText(last.end, now)})</span>
-          ${last.note ? `<div class="feed-note">📝 ${escapeHtml(last.note)}</div>` : `<div style="opacity:.7;font-size:.78rem;margin-top:4px">antippen für Notiz</div>`}
+          ${last.note ? `<div class="feed-note">📝 ${escapeHtml(last.note)}</div>` : `<div style="opacity:.7;font-size:.78rem;margin-top:4px">Antippen für Notiz</div>`}
         `;
       }
 
@@ -2725,6 +2746,46 @@
         renderReminderBanner(now);
       }
 
+      /* ============ v25: Akkuwarnung (unter 50 %, im Wach-Modus) ============ */
+
+      let batteryBanner = null;
+
+      async function watchBattery() {
+        if (!navigator.getBattery) return;   // z. B. iOS Safari / Firefox: keine Batterie-Infos
+        try {
+          const bat = await navigator.getBattery();
+          const update = () => {
+            const relevant = wakeWanted(new Date());   // Warnung nur, wenn Wach-Modus scharf ist
+            const low = relevant && !bat.charging && bat.level <= 0.5;
+            if (low) {
+              if (!batteryBanner) {
+                batteryBanner = document.createElement("div");
+                batteryBanner.setAttribute("role", "alert");
+                Object.assign(batteryBanner.style, {
+                  position: "sticky", top: "0", zIndex: "9998",
+                  margin: "0", padding: "10px 16px",
+                  background: "#fff3d6", color: "#7a5a10",
+                  fontSize: ".85rem", lineHeight: "1.5",
+                  borderBottom: "2px solid #d9a441"
+                });
+                document.body.prepend(batteryBanner);
+              }
+              batteryBanner.hidden = false;
+              batteryBanner.textContent =
+                "🔋 Akku nur noch " + Math.round(bat.level * 100) + " % – der Wach-Modus verbraucht " +
+                "deutlich Energie. Bitte das Gerät anschließen, damit die Erinnerung zuverlässig klingelt.";
+            } else if (batteryBanner) {
+              batteryBanner.hidden = true;
+            }
+          };
+          bat.addEventListener("levelchange", update);
+          bat.addEventListener("chargingchange", update);
+          update();
+          // Auch reagieren, wenn der Wach-Modus später ein-/ausschaltet
+          setInterval(update, 60000);
+        } catch { /* Battery API nicht verfügbar */ }
+      }
+      watchBattery();
       loadAll();
       applyTheme(false);
       resizeGraph();
