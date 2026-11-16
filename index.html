@@ -7,15 +7,19 @@
   <title>Still-Tracker</title>
   <!--
     ============================================================
-    Still-Tracker · Version 21 (Dark Mode)
-    Datum: 11.11.2026
-    Entwickelt von: Lumo (Proton) im Auftrag der Nutzerin/des Nutzers
-    Neu in v21 (aufbauend auf v20):
-    - Dark Mode mit 3 Modi: Manuell (Standard), Zeitfenster, OS folgen
-    - Schnellumschalter (Mond/Sonne) im Kopf, immer erreichbar
-    - Sanfter Farbwechsel (Transition) statt abruptem Umsprung
-    - Zeitstrahl und alle Elemente folgen dem Theme
-    - Theme-Einstellung wird gespeichert und im Backup mitgeführt
+    Still-Tracker · Version 24 (Wach-Modus überarbeitet)
+    Datum: 16.11.2026
+    Neu in v24 (aufbauend auf v23):
+    - FIX: Berührung im abgedunkelten Zustand löst garantiert
+      keine Taste mehr aus – auch der Nach-Klick derselben
+      Geste wird verworfen (Grund für das alte Problem)
+    - Wischen/Scrollen hellt die Seite auf und zählt als Aktivität
+    - Manueller Countdown: Minutenfeld + Start-Button oben im
+      Hauptbereich (neben dem Erinnerungs-Banner)
+    - Vollbild beim Start von Stillzeit/Countdown im Wach-Modus
+      (Android Chrome/Firefox; iOS Safari unterstützt das nicht)
+    - FIX: Tippfehler im Ton-Test-Autostopp behoben
+    Speicherschlüssel unverändert: still-tracker-data-v3
     ============================================================
   -->
   <style>
@@ -35,8 +39,8 @@
       --right-bg: #faf3e7;
       --right-border: #e8dcc4;
       --accent: #9d7650;
-      --surface: #fffdfb;       /* Graph, Listenzeilen */
-      --soft: #f7eee7;          /* Timer-Kasten, Gesamt-Statistik */
+      --surface: #fffdfb;
+      --soft: #f7eee7;
       --btn-bg: white;
       --danger-border: #d8b8ae;
       --danger-bg: #fff5f2;
@@ -45,6 +49,9 @@
       --backdrop: #342a2788;
       --shadow-card: #4a30200a;
       --shadow-pop: #4a302033;
+      --rem-bg: #eef3f8;
+      --rem-border: #cfdcec;
+      --rem-ink: #46647f;
     }
 
     html[data-theme="dark"] {
@@ -73,6 +80,9 @@
       --backdrop: #000000aa;
       --shadow-card: #00000033;
       --shadow-pop: #00000066;
+      --rem-bg: #24303c;
+      --rem-border: #3c4d5e;
+      --rem-ink: #a9c3da;
     }
 
     * { box-sizing: border-box; }
@@ -86,20 +96,23 @@
       font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
     }
 
-    /* v21: sanfter Theme-Übergang statt abruptem Umsprung */
     body, .card, .live-timer, button, select, input, dialog, textarea,
     .feed-row, .graph-wrap, .stat, .last-feed, .tap-detail, .help-head,
-    .help-close, dialog::backdrop, .live-note {
+    .help-close, .live-note, .reminder-banner, .rem-list-row {
       transition: background-color .45s ease, border-color .45s ease,
                   color .45s ease, box-shadow .45s ease;
     }
 
     main { width: min(100%, 560px); margin: 0 auto; padding: 26px 18px 38px; }
+
+    /* v23: Wach-Modus – Seite dunkelt ab, Berührung hellt auf */
+    main#wakeMain { transition: background-color .45s ease, filter 2s ease; }
+    body.screen-dim main#wakeMain { filter: brightness(.14) saturate(.6); }
+
     header { margin-bottom: 18px; text-align: center; position: relative; }
     h1 { margin: 0 0 16px; font-size: 1.6rem; }
     .muted { color: var(--muted); }
 
-    /* v21: Schnellumschalter hell/dunkel */
     .theme-quick {
       position: absolute;
       top: -2px;
@@ -214,7 +227,6 @@
 
     .last-feed.side-left { background: var(--left); color: white; }
     .last-feed.side-right { background: var(--right-strong); color: var(--right-ink); }
-
     .last-feed strong { font-size: .98rem; display: block; margin-bottom: 2px; }
     .last-feed .feed-note {
       margin-top: 6px;
@@ -226,6 +238,54 @@
 
     .hint { min-height: 1.35em; margin: 12px 0 0; color: var(--muted); font-size: .86rem; }
 
+    /* Erinnerungs-Banner im Hauptbereich */
+    .reminder-banner {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--rem-bg);
+      border: 1px solid var(--rem-border);
+      color: var(--rem-ink);
+      font-size: .86rem;
+      font-weight: 650;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .reminder-banner.rem-fired {
+      animation: remPulse 1.2s ease-in-out infinite alternate;
+    }
+
+    @keyframes remPulse {
+      from { filter: brightness(1); }
+      to { filter: brightness(1.25); }
+    }
+
+    /* v24: Manuelle-Countdown-Leiste oben im Hauptbereich */
+    #remManualBar {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--rem-bg);
+      border: 1px solid var(--rem-border);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    #remManualBar input[type="number"] {
+      min-height: 42px;
+      width: 92px;
+      padding: 4px 10px;
+      border: 1px solid var(--rem-border);
+      border-radius: 11px;
+      background: var(--btn-bg);
+      color: var(--ink);
+      font-variant-numeric: tabular-nums;
+    }
+
+    #remManualBar[hidden] { display: none !important; }
+    
     .stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
     .stat { padding: 11px 6px; border-radius: 13px; }
     .stat.stat-left { background: var(--left-bg); border: 1px solid var(--left-border); }
@@ -356,8 +416,10 @@
 
     .setting-row + .setting-row { margin-top: 10px; }
     .setting-row p { margin: 0; font-size: .92rem; }
+    .setting-row label { display: flex; align-items: center; gap: 8px; font-size: .92rem; cursor: pointer; }
 
-    .setting-row select, .setting-row input[type="time"] {
+    .setting-row select, .setting-row input[type="time"], .setting-row input[type="number"],
+    .setting-row input[type="text"] {
       min-height: 42px;
       padding: 4px 10px;
       border: 1px solid var(--line);
@@ -366,7 +428,50 @@
       color: var(--ink);
     }
 
-    #themeWindowRow[hidden] { display: none !important; }
+    .setting-row input[type="number"] { width: 92px; }
+    .setting-row input[type="text"] { max-width: 130px; }
+
+    .settings-block { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--line); }
+    .settings-block > .setting-row:first-child { margin-top: 0; }
+
+    .rem-times { display: grid; gap: 7px; margin-top: 10px; }
+
+    .rem-list-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface);
+      font-size: .9rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .rem-add-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
+    .rem-add-row input[type="time"] { flex: 0 0 auto; }
+
+    .small-action {
+      min-height: 40px;
+      padding: 5px 14px;
+      border: 1px solid var(--accent);
+      border-radius: 10px;
+      background: var(--btn-bg);
+      color: var(--ink);
+      font-size: .86rem;
+      font-weight: 650;
+    }
+
+    .rem-inline-note { margin: 8px 0 0; color: var(--muted); font-size: .79rem; line-height: 1.5; }
+
+    input[type="range"] { accent-color: var(--accent); width: 140px; }
+
+    #themeWindowRow[hidden], #remFixedRows[hidden], #remIntervalRows[hidden],
+    #remManualRows[hidden], #remFrameRows[hidden], #remCustomRows[hidden],
+    #remManualBar[hidden] {
+      display: none !important;
+    }
 
     .action-button {
       width: 100%;
@@ -423,6 +528,17 @@
     .help-body ul { margin: 4px 0 10px; padding-left: 20px; }
     .help-body li { margin: 3px 0; }
 
+    #dimShield {
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+      position: fixed;
+      inset: 0;
+      z-index: 9999;
+      background: transparent;
+      cursor: pointer;
+    }
+
     @media (max-width: 360px) {
       main { padding-right: 12px; padding-left: 12px; }
       .card { padding: 16px 13px; }
@@ -434,7 +550,8 @@
 <body>
   <div id="saveWarning" role="alert" style="display:none;margin:0;padding:12px 16px;background:#ffe1db;color:#8b1f0e;font-size:.85rem;line-height:1.5;border-bottom:2px solid #d95f49;"></div>
 
-  <main>
+  <div id="dimShield" hidden></div>
+  <main id="wakeMain">
     <header>
       <h1>Still-Tracker</h1>
       <button class="theme-quick" id="themeQuick" type="button" title="Hell/Dunkel umschalten">🌙</button>
@@ -457,6 +574,13 @@
 
       <button class="big-toggle" id="bigToggle" type="button">Stillzeit starten</button>
       <div class="last-feed" id="lastFeed" hidden title="Antippen: Notiz zur letzten Stillzeit"></div>
+
+      <div id="remManualBar" hidden>
+        <input type="number" id="remManualMinTop" min="1" max="720" value="180">
+        <button class="small-action" id="remManualStartTop" type="button" style="flex:1">Countdown starten</button>
+      </div>
+
+      <div class="reminder-banner" id="reminderBanner" hidden></div>
       <p class="hint" id="feedHint"></p>
     </section>
 
@@ -487,39 +611,133 @@
       </div>
       <p class="graph-status" id="graphStatus"></p>
     </section>
-
     <h2>Statistik</h2>
     <section class="card">
       <div class="stats" id="statsBox"></div>
     </section>
 
-
     <h2>Einstellungen</h2>
     <section class="card">
-      <div class="setting-row">
-        <p>Nach dem Stillen die Seite …</p>
-        <select id="autoSwitch">
-          <option value="on">automatisch wechseln</option>
-          <option value="off">nicht ändern</option>
-        </select>
-      </div>
-      <div class="setting-row">
-        <p>Farbschema</p>
-        <select id="themeMode">
-          <option value="manual">manuell umschalten</option>
-          <option value="window">nach Zeitfenster</option>
-          <option value="os">wie System/Browser</option>
-        </select>
-      </div>
-      <div class="setting-row" id="themeWindowRow" hidden>
-        <p>Dunkel von … bis …</p>
-        <span style="display:flex;gap:6px;align-items:center">
-          <input type="time" id="themeStart" value="20:00">
-          <input type="time" id="themeEnd" value="07:00">
-        </span>
-      </div>
-    </section>
+      <details id="settingsDetails" open>
+        <summary>Einstellungen ein-/ausklappen</summary>
+        <div class="setting-row">
+          <p>Nach dem Stillen die Seite …</p>
+          <select id="autoSwitch">
+            <option value="on">automatisch wechseln</option>
+            <option value="off">nicht ändern</option>
+          </select>
+        </div>
+        <div class="setting-row">
+          <p>Farbschema</p>
+          <select id="themeMode">
+            <option value="manual">manuell umschalten</option>
+            <option value="window">nach Zeitfenster</option>
+            <option value="os">wie System/Browser</option>
+          </select>
+        </div>
+        <div class="setting-row" id="themeWindowRow" hidden>
+          <p>Dunkel von … bis …</p>
+          <span style="display:flex;gap:6px;align-items:center">
+            <input type="time" id="themeStart" value="20:00">
+            <input type="time" id="themeEnd" value="07:00">
+          </span>
+        </div>
 
+        <div class="settings-block">
+          <div class="setting-row">
+            <label for="remEnabled"><input type="checkbox" id="remEnabled"> Erinnerung aktiv</label>
+          </div>
+        </div>
+
+        <details class="settings-block" id="remSettings" hidden>
+          <summary>Erinnerung ein-/ausklappen</summary>
+          <div class="setting-row">
+            <p>Modus</p>
+            <select id="remMode">
+              <option value="fixed">feste Uhrzeiten</option>
+              <option value="interval">fester Abstand</option>
+              <option value="manual">manueller Countdown</option>
+            </select>
+          </div>
+
+          <div id="remFixedRows" hidden>
+            <div class="rem-times" id="remTimesList"></div>
+            <div class="rem-add-row">
+              <input type="time" id="remNewTime" value="06:00">
+              <button class="small-action" id="remAddTime" type="button">+ Uhrzeit</button>
+            </div>
+            <p class="rem-inline-note">Der Ton klingelt zu jeder eingetragenen Uhrzeit, solange der Tracker geöffnet ist.</p>
+          </div>
+
+          <div id="remIntervalRows" hidden>
+            <div class="setting-row">
+              <p>Abstand (Minuten)</p>
+              <input type="number" id="remIntervalMin" min="1" max="720" value="180">
+            </div>
+            <div class="setting-row">
+              <label for="remFrameOn"><input type="checkbox" id="remFrameOn"> nur in Zeitrahmen erinnern</label>
+            </div>
+            <div class="setting-row" id="remFrameRows" hidden>
+              <p>Aktiv von … bis …</p>
+              <span style="display:flex;gap:6px;align-items:center">
+                <input type="time" id="remFrameStart" value="22:00">
+                <input type="time" id="remFrameEnd" value="06:00">
+              </span>
+            </div>
+            <p class="rem-inline-note">Der Abstand gilt ab Ende der letzten Stillzeit. Ein neues Stillen setzt den Timer neu. Während einer laufenden Stillzeit wird nicht erinnert.</p>
+          </div>
+
+          <div id="remManualRows" hidden>
+            <div class="setting-row">
+              <p>Countdown (Minuten)</p>
+              <input type="number" id="remManualMin" min="1" max="720" value="180">
+            </div>
+            <div class="setting-row">
+              <p>Status</p>
+              <button class="small-action" id="remManualStart" type="button">Countdown starten</button>
+            </div>
+            <p class="rem-inline-note">Der Countdown läuft einmalig ab dem Start; danach steht er wieder auf „Bereit“ und kann neu gestartet werden.</p>
+          </div>
+
+          <div class="settings-block">
+            <div class="setting-row">
+              <label for="remWakeOn"><input type="checkbox" id="remWakeOn" checked> Bildschirm wachhalten (Wach-Modus)</label>
+            </div>
+            <p class="rem-inline-note" id="remWakeStatus"></p>
+            <p class="rem-inline-note">Solange die Erinnerung aktiv ist (im Zeitrahmen), bleibt der Bildschirm an und die Seite dunkelt nach kurzer Zeit ab. Jede Berührung hellt sofort wieder auf. Manuell sperren kannst du jederzeit – dann klingelt die Erinnerung erst nach dem Entsperren. Beachte den Akkuverbrauch.</p>
+          </div>
+
+          <div class="settings-block">
+            <div class="setting-row">
+              <p>Klingelton</p>
+              <select id="remTone">
+                <option value="default">Standard (Spieldose)</option>
+                <option value="custom">Eigener Ton</option>
+              </select>
+            </div>
+            <div id="remCustomRows" hidden>
+              <div class="rem-add-row">
+                <button class="small-action" id="remPickTone" type="button">Ton auswählen …</button>
+                <span class="rem-inline-note" id="remCustomName" style="margin:0"></span>
+              </div>
+              <p class="rem-inline-note">Kurze Audiodateien (bis ca. 1–2 MB) passen am besten in den Browser-Speicher.</p>
+            </div>
+            <div class="setting-row">
+              <p>Lautstärke</p>
+              <span style="display:flex;gap:8px;align-items:center">
+                <input type="range" id="remVolume" min="0" max="100" value="60">
+                <button class="small-action" id="remTest" type="button">Test ▶</button>
+              </span>
+            </div>
+            <p class="rem-inline-note">
+              Wichtig: Die Erinnerung klingelt nur, solange der Tracker geöffnet ist.
+              Zuverlässig funktioniert sie über die Startbildschirm-Verknüpfung der App —
+              <button class="small-action" id="remHowto" type="button" style="min-height:32px;padding:2px 10px">Wie geht das?</button>
+            </p>
+          </div>
+        </details>
+      </details>
+    </section>
 
     <h2>Stillzeiten</h2>
     <section class="card">
@@ -551,6 +769,7 @@
         <button class="action-button secondary" id="importData" type="button" style="margin-top:0">Sicherung importieren</button>
       </div>
       <input type="file" id="importFile" accept="application/json,.json" hidden>
+      <input type="file" id="remToneFile" accept="audio/*" hidden>
     </section>
 
     <button class="action-button secondary" id="helpButton" type="button">ℹ️ Anleitung &amp; Hilfe</button>
@@ -564,6 +783,45 @@
     </p>
   </main>
 
+  <dialog id="reminderHowtoDialog">
+    <div class="help-head">
+      <h3>Startbildschirm-Verknüpfung &amp; Wach-Modus</h3>
+      <button class="help-close" id="reminderHowtoClose" type="button">Schließen</button>
+    </div>
+    <div class="help-body">
+      <p>Für zuverlässige Erinnerungen sollte der Tracker als App-Verknüpfung auf dem
+      Startbildschirm geöffnet werden — nicht als normale Browser-Registerkarte.</p>
+      <h4>Android (Chrome)</h4>
+      <ul>
+        <li>Tracker in Chrome öffnen</li>
+        <li>Menü (⋮) → <strong>„Zum Startbildschirm hinzufügen“</strong></li>
+      </ul>
+      <h4>Android (Firefox)</h4>
+      <ul>
+        <li>Tracker in Firefox öffnen</li>
+        <li>Menü (⋮) → <strong>„Zum Startbildschirm hinzufügen“</strong></li>
+      </ul>
+      <h4>iPhone/iPad (Safari)</h4>
+      <ul>
+        <li>Tracker in Safari öffnen</li>
+        <li>Teilen-Symbol → <strong>„Zum Home-Bildschirm“</strong></li>
+      </ul>
+      <h4>Firefox am Computer</h4>
+      <p>Der Desktop-Firefox hat keine „Zum Startbildschirm“-Funktion. Dort entweder
+      Chrome/Edge für die Verknüpfung nutzen oder den Reiter des Trackers anpinnen
+      (Rechtsklick auf den Reiter → „Reiter anpinnen“).</p>
+      <h4>Wach-Modus (Bildschirm bleibt an)</h4>
+      <p>Ist die Erinnerung aktiv (im Zeitrahmen), verhindert der Wach-Modus das
+      automatische Abschalten des Bildschirms; die Seite dunkelt dabei stark ab.
+      Berühren hellt sie sofort wieder auf. <strong>Von Hand gesperrt</strong> werden kann
+      der Bildschirm jederzeit — in dem Fall klingelt die Erinnerung erst, nachdem
+      du wieder entsperrst. Falls der Browser die Frage „Bildschirm eingeschaltet
+      lassen?“ zeigt, beantworte sie mit „Zulassen“.</p>
+      <p>Bei komplett geschlossenem Browser oder gesperrtem Bildschirm können Webseiten
+      grundsätzlich nicht klingeln — dafür bräuchte es eine echte installierte App.</p>
+    </div>
+  </dialog>
+
   <dialog id="helpDialog">
     <div class="help-head">
       <h3>Anleitung</h3>
@@ -572,46 +830,54 @@
     <div class="help-body">
       <h4>Stillzeit aufzeichnen</h4>
       <ul>
-        <li><strong>Seite wählen:</strong> Tippe auf „Links" oder „Rechts" – die markierte Seite gilt für die Aufzeichnung.</li>
+        <li><strong>Seite wählen:</strong> Tippe auf „Links“ oder „Rechts“ – die markierte Seite gilt für die Aufzeichnung.</li>
         <li><strong>Starten / Beenden:</strong> Der große Button startet und beendet die Stillzeit. Ein laufender Timer zeigt die bisherige Dauer.</li>
         <li><strong>Seitenwechsel mitten im Stillen:</strong> Wählst du während einer laufenden Aufzeichnung die andere Seite, wird der Eintrag an dieser Stelle beendet und sofort auf der neuen Seite weitergemessen – es geht keine Zeit verloren.</li>
-        <li><strong>Einstellung „Nach dem Stillen die Seite …":</strong> Mit „automatisch wechseln" stellt der Tracker nach Beenden einer Stillzeit automatisch die andere Seite ein; mit „nicht ändern" bleibt die gewählte Seite stehen.</li>
+        <li><strong>Einstellung „Nach dem Stillen die Seite …“:</strong> Mit „automatisch wechseln“ stellt der Tracker nach Beenden einer Stillzeit automatisch die andere Seite ein; mit „nicht ändern“ bleibt die gewählte Seite stehen.</li>
       </ul>
 
       <h4>Notizen</h4>
       <ul>
         <li><strong>Während des Stillens:</strong> Tippe auf den Timer-Kasten oben, um eine Notiz zur laufenden Stillzeit zu erfassen. Sie wandert beim Beenden automatisch mit dem Eintrag mit.</li>
-        <li><strong>Nach dem Stillen:</strong> Tippe auf die „Zuletzt"-Box unter dem Start-Button, um eine Notiz zur letzten Stillzeit zu erfassen oder zu ändern.</li>
-        <li><strong>Nachträglich:</strong> Jede Stillzeit in der Liste unten hat einen „Notiz"-Button. Leeres Feld + OK entfernt die Notiz wieder.</li>
+        <li><strong>Nach dem Stillen:</strong> Tippe auf die „Zuletzt“-Box, um eine Notiz zur letzten Stillzeit zu erfassen oder zu ändern.</li>
+        <li><strong>Nachträglich:</strong> Jede Stillzeit in der Liste unten hat einen „Notiz“-Button. Leeres Feld + OK entfernt die Notiz wieder.</li>
+      </ul>
+
+      <h4>Erinnerung</h4>
+      <ul>
+        <li><strong>Aktivieren:</strong> In den Einstellungen über „Erinnerung aktiv“ – erst dann erscheinen die Erinnerungsoptionen und der Hinweiskasten im Hauptbereich.</li>
+        <li><strong>Alarm-Schleife:</strong> Wenn es klingelt, läuft der Ton so lange, bis du den Hinweiskasten antippst, eine neue Stillzeit startest oder die Seite wechselst.</li>
+        <li><strong>Feste Uhrzeiten:</strong> Beliebig viele Uhrzeiten eintragen; zu jeder klingelt der Ton.</li>
+        <li><strong>Fester Abstand:</strong> Getaktet ab dem Ende der letzten Stillzeit; jedes neue Stillen setzt den Timer neu. Optional auf einen Zeitrahmen (z. B. nachts) beschränkt.</li>
+        <li><strong>Manueller Countdown:</strong> Minuten eingeben, „Countdown starten“ – läuft einmalig und steht danach auf „Bereit“.</li>
+        <li><strong>Klang:</strong> Standard ist ein ruhiger Spieldosen-Klang (Brahms' Wiegenlied); eigener Ton per Upload möglich, Lautstärke einstellbar, Test-Knopf zum Probehören (erneutes Antippen stoppt den Test).</li>
+        <li><strong>Wach-Modus:</strong> Hält den Bildschirm an, solange die Erinnerung im Zeitrahmen aktiv ist; die Seite dunkelt ab, Berührung hellt auf. Manuelles Sperren bleibt möglich.</li>
+        <li><strong>Wichtig:</strong> Von Hand gesperrter Bildschirm oder geschlossener Browser = kein Klingeln; nach dem Entsperren/Öffnen wird eine fällige Erinnerung sofort nachgeholt.</li>
       </ul>
 
       <h4>Farbschema (hell/dunkel)</h4>
       <ul>
-        <li><strong>Manuell:</strong> Umschalten über den Mond/Sonne-Button oben rechts oder unter Einstellungen. Das ist der Standard.</li>
-        <li><strong>Zeitfenster:</strong> Dunkel automatisch in einem Zeitraum (z. B. 20:00–07:00, auch über Mitternacht möglich), sonst hell.</li>
-        <li><strong>Wie System/Browser:</strong> Folgt der Hell/Dunkel-Einstellung deines Geräts, auch bei later Änderungen.</li>
-        <li>Der Mond/Sonne-Button wirkt in jedem Modus: ein Tipp schaltet sofort um und stellt gleichzeitig auf „manuell" um.</li>
-        <li>Der Wechsel erfolgt weich überblendet statt abrupt.</li>
+        <li><strong>Manuell:</strong> Umschalten über den Mond/Sonne-Button oben rechts oder unter Einstellungen.</li>
+        <li><strong>Zeitfenster:</strong> Dunkel automatisch in einem Zeitraum, sonst hell.</li>
+        <li><strong>Wie System/Browser:</strong> Folgt der Einstellung des Geräts.</li>
       </ul>
 
       <h4>Zeitstrahl</h4>
       <ul>
-        <li>Die Zeitraum-Buttons (1 Std bis 7 Tage) legen das Fenster fest, − / + zoomen darüber hinaus.</li>
-        <li>„◀ zurück" / „vor ▶" blättern nur innerhalb der vorhandenen Daten – über den ältesten Eintrag hinaus kann nicht geblättert werden.</li>
-        <li>Einen Balken antippen zeigt Details zur Stillzeit. Der Zeitstrahl läuft live mit, auch während des Stillens.</li>
-        <li>Der Zoom- und Blickzustand wird pro Messreihe gemerkt und beim erneuten Öffnen wiederhergestellt.</li>
+        <li>Zeitraum-Buttons (1 Std bis 7 Tage), − / + zum Zoomen, „◀ zurück“ / „vor ▶“ blättern nur innerhalb der vorhandenen Daten.</li>
+        <li>Balken antippen zeigt Details. Der Zeitstrahl läuft live mit.</li>
+        <li>Zoom- und Blickzustand werden pro Messreihe gemerkt.</li>
       </ul>
 
       <h4>Messreihen</h4>
       <ul>
-        <li>Das Schließen des Browsers oder der Seite beendet <strong>keine</strong> Messreihe – beim nächsten Öffnen wird die aktuelle Reihe automatisch fortgeführt, auch eine laufende Stillzeit läuft weiter.</li>
-        <li>Jede gespeicherte Reihe lässt sich über „Öffnen" ansehen und wird dabei sofort wieder zur aktuellen Messreihe – egal ob sie vorher beendet wurde oder nicht.</li>
-        <li>Jede Reihe in der Historie kann über „Löschen" endgültig entfernt werden (mit Bestätigung).</li>
-        <li><strong>Speichern:</strong> Jede Änderung wird sofort gespeichert – zusätzlich auch beim Verbergen oder Schließen der Seite/App. Falls das Speichern verweigert wird (z. B. Privatmodus), erscheint oben eine deutliche Warnung.</li>
+        <li>Das Schließen des Browsers beendet keine Messreihe – beim nächsten Öffnen wird fortgeführt.</li>
+        <li>Jede Reihe über „Öffnen“ wird sofort wieder zur aktuellen Messreihe.</li>
+        <li>„Löschen“ entfernt eine Reihe endgültig (mit Bestätigung).</li>
       </ul>
 
       <h4>Sicherung</h4>
-      <p>Mit „Sicherung exportieren" speicherst du alle Daten als JSON-Datei (Notizen und Farbschema-Einstellung eingeschlossen), mit „Sicherung importieren" stellst du sie wieder her (überschreibt die aktuellen Daten).</p>
+      <p>Mit „Sicherung exportieren“ speicherst du alle Daten als JSON-Datei (Notizen, Farbschema, Erinnerungseinstellungen und eigenen Klingelton eingeschlossen), mit „Sicherung importieren“ stellst du sie wieder her.</p>
     </div>
   </dialog>
 
@@ -623,6 +889,8 @@
       const LEGACY_KEYS = ["still-tracker-data-v2", "still-tracker-data-v1"];
       const $ = id => document.getElementById(id);
       const HOUR = 60 * 60 * 1000;
+      const REM_MAX_TONE_BYTES = 2 * 1024 * 1024; // Rohdaten-Grenze für eigenen Ton
+      const DIM_DELAY_MS = 20000;                 // v23: Untätigkeit, bevor die Seite abdunkelt
 
       /* ============ Zustand ============ */
 
@@ -631,9 +899,24 @@
       let currentId = null;
       let selectedId = null;
       let autoSwitch = "on";
+      let theme = { mode: "manual", dark: false, start: "20:00", end: "07:00" };
 
-      // v21: Theme-Zustand (manuell | window | os)
-      let theme = { mode: "os", dark: false, start: "20:00", end: "07:00" };
+      let reminder = {
+        enabled: false,
+        mode: "interval",            // fixed | interval | manual
+        times: ["02:00", "06:00"],   // Modus fixed
+        intervalMin: 180,            // Modus interval
+        frameOn: false,              // Zeitrahmen im Intervall-Modus
+        frameStart: "22:00",
+        frameEnd: "06:00",
+        manualMin: 180,              // Default des manuellen Countdowns
+        manualUntil: 0,              // Endzeitpunkt des laufenden Countdowns (0 = bereit)
+        volume: 0.6,
+        tone: "default",             // default | custom
+        customName: "",
+        customData: "",
+        wakeOn: true                 // v23: Wach-Modus (Bildschirm wachhalten)
+      };
 
       let viewSpanHours = 12;
       let viewRight = null;
@@ -641,6 +924,23 @@
 
       let tapTargets = [];
       let openDetail = null;
+
+      // Laufzeit (nicht exportiert)
+      let lastFiredAt = 0;        // letzter Auslösung-Zeitpunkt (Anti-Doppelklingeln)
+      let lastFiredSlot = "";     // Kennung des zuletzt ausgelösten Slots
+      let customAudio = null;     // Audio-Objekt für eigenen Ton
+      let ringNodes = [];    // v23.1: gerade klingende Oszillatoren
+      let ringMaster = null; // v23.1: Sammel-Gain der aktuellen Wiedergabe
+      let alarmRinging = false;   // Alarm klingelt (Schleife) bis quittiert
+      let alarmLoopTimer = null;  // Wiederholungs-Intervall des Alarms
+      let testTimer = null;       // Läuft gerade der Ton-Test?
+
+      // v23: Wach-Modus & Abdunkeln
+      let wakeLock = null;          // aktuell gehaltener Screen Wake Lock
+      let wakeDenied = false;       // Browser hat abgelehnt / nicht unterstützt
+      let wakeRetryAt = 0;          // nächster Versuch, den Lock anzufordern
+      let lastInteraction = Date.now();
+      let wasHiddenWhileArmed = false;
 
       function showSaveWarning(detail) {
         const box = $("saveWarning");
@@ -664,16 +964,14 @@
             };
           }
           localStorage.setItem(STORAGE_KEY, JSON.stringify({
-            currentSide, series, currentId, autoSwitch, theme
+            currentSide, series, currentId, autoSwitch, theme, reminder
           }));
         } catch (error) {
           showSaveWarning(error && error.name ? error.name : "unbekannter Fehler");
         }
       }
 
-      function scheduleSave() {
-        persistState();
-      }
+      function scheduleSave() { persistState(); }
 
       function makeId() {
         return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -722,6 +1020,17 @@
         return `${String(Math.floor(sec / 60)).padStart(2, "0")}:${String(sec % 60).padStart(2, "0")}`;
       }
 
+      function fmtDurationLong(ms) {
+        if (!Number.isFinite(ms) || ms < 0) return "—";
+        const sec = Math.floor(ms / 1000);
+        const h = Math.floor(sec / 3600);
+        const m = Math.floor((sec % 3600) / 60);
+        const s = sec % 60;
+        if (h > 0) return `${h} Std. ${String(m).padStart(2, "0")} Min.`;
+        if (m > 0) return `${m}:${String(s).padStart(2, "0")} Min.`;
+        return `${s} Sek.`;
+      }
+
       function timeOfDay(ts) {
         return new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       }
@@ -751,7 +1060,8 @@
       function isSameDay(a, b) {
         const da = new Date(a), db = new Date(b);
         return da.getFullYear() === db.getFullYear() &&
-               da.getMonth() === db.getMonth() && da.getDate() === db.getDate();
+               da.getMonth() === db.getMonth() &&
+               da.getDate() === db.getDate();
       }
 
       function escapeHtml(text) {
@@ -761,7 +1071,7 @@
           .replaceAll(">", "&gt;");
       }
 
-      /* ============ Theme (v21) ============ */
+      /* ============ Theme ============ */
 
       const LIGHT_THEME_COLOR = "#f6eee7";
       const DARK_THEME_COLOR = "#1c1714";
@@ -773,12 +1083,15 @@
         return h * 60 + m;
       }
 
-      function inWindow(now) {
-        const cur = now.getHours() * 60 + now.getMinutes();
-        const s = minutesOf(theme.start), e = minutesOf(theme.end);
+      function inMinuteWindow(nowMin, startHHMM, endHHMM) {
+        const s = minutesOf(startHHMM), e = minutesOf(endHHMM);
         if (s === null || e === null || s === e) return false;
-        // Fenster über Mitternacht (z. B. 20:00–07:00)
-        return s < e ? (cur >= s && cur < e) : (cur >= s || cur < e);
+        return s < e ? (nowMin >= s && nowMin < e) : (nowMin >= s || nowMin < e);
+      }
+
+      function inWindow(now) {
+        const d = now || new Date();
+        return inMinuteWindow(d.getHours() * 60 + d.getMinutes(), theme.start, theme.end);
       }
 
       const osDarkQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
@@ -808,7 +1121,6 @@
       }
 
       $("themeQuick").addEventListener("click", () => {
-        // Sofort umschalten und auf manuell umstellen (dauerhaftes Übersteuern)
         const dark = document.documentElement.getAttribute("data-theme") === "dark";
         theme.mode = "manual";
         theme.dark = !dark;
@@ -878,6 +1190,26 @@
         if (typeof raw.end === "string" && /^\d{2}:\d{2}$/.test(raw.end)) theme.end = raw.end;
       }
 
+      function loadReminder(raw) {
+        if (!raw || typeof raw !== "object") return;
+        if (["fixed", "interval", "manual"].includes(raw.mode)) reminder.mode = raw.mode;
+        reminder.enabled = Boolean(raw.enabled);
+        if (Array.isArray(raw.times)) {
+          reminder.times = raw.times.filter(t => typeof t === "string" && /^\d{2}:\d{2}$/.test(t)).slice(0, 24);
+        }
+        if (Number.isFinite(raw.intervalMin)) reminder.intervalMin = Math.min(720, Math.max(1, Math.round(raw.intervalMin)));
+        if (Number.isFinite(raw.manualMin)) reminder.manualMin = Math.min(720, Math.max(1, Math.round(raw.manualMin)));
+        if (Number.isFinite(raw.volume)) reminder.volume = Math.min(1, Math.max(0, raw.volume));
+        if (raw.tone === "default" || raw.tone === "custom") reminder.tone = raw.tone;
+        reminder.customName = typeof raw.customName === "string" ? raw.customName : "";
+        reminder.customData = typeof raw.customData === "string" && raw.customData.startsWith("data:audio") ? raw.customData : "";
+        reminder.frameOn = Boolean(raw.frameOn);
+        if (typeof raw.frameStart === "string" && /^\d{2}:\d{2}$/.test(raw.frameStart)) reminder.frameStart = raw.frameStart;
+        if (typeof raw.frameEnd === "string" && /^\d{2}:\d{2}$/.test(raw.frameEnd)) reminder.frameEnd = raw.frameEnd;
+        reminder.manualUntil = Number.isFinite(raw.manualUntil) ? raw.manualUntil : 0;
+        reminder.wakeOn = raw.wakeOn !== false;   // v23: Standard an, ältere Daten kompatibel
+      }
+
       function loadAll() {
         let data = null;
         try {
@@ -902,24 +1234,9 @@
                 if (legacy.currentSide) currentSide = legacy.currentSide;
                 if (legacy.autoSwitch === "off") autoSwitch = "off";
                 loadTheme(legacy.theme);
-                if (Array.isArray(legacy.series) && legacy.series.length > 1) {
-                  for (let i = 1; i < legacy.series.length; i++) {
-                    const s = legacy.series[i];
-                    data.series.push({
-                      id: makeId(),
-                      startedAt: Number.isFinite(s.startedAt) ? s.startedAt : Date.now(),
-                      endedAt: Number.isFinite(s.endedAt) ? s.endedAt : null,
-                      finished: Boolean(s.finished),
-                      view: null,
-                      entries: (s.entries || []).map(e => sanitizeEntry({
-                        side: e.side ?? e.entries?.[0]?.side, start: e.start, end: e.end
-                      })).filter(Boolean)
-                    });
-                  }
-                }
                 break;
               }
-            } catch { /* weiter mit nächstem Schlüssel */ }
+            } catch { /* weiter */ }
           }
         }
 
@@ -929,6 +1246,7 @@
           }
           if (data.autoSwitch === "off") autoSwitch = "off";
           loadTheme(data.theme);
+          loadReminder(data.reminder);
           const norm = normalizeSessions(data.series, data.currentId);
           series = norm.sessions;
           currentId = norm.current;
@@ -946,20 +1264,690 @@
         $("themeStart").value = theme.start;
         $("themeEnd").value = theme.end;
         $("themeWindowRow").hidden = theme.mode !== "window";
+
+        syncReminderUI();
         applyViewState(activeSeries());
         applyTheme(false);
         persistState();
       }
 
+      /* ================================================================
+         ERINNERUNGSFUNKTION
+         ================================================================ */
+
+      /* --- Klang: Standard = Spieldosen-Variante von Brahms' Wiegenlied --- */
+
+      const LULLABY = [
+        // [MIDI-Note, Startschlag, Dauer in Schlägen] – erste Zeilen, ruhig
+        [64, 0.0, 1.0], [64, 1.0, 1.0], [67, 2.0, 2.0],   // Gu-ten A-bend
+        [67, 4.0, 1.0], [65, 5.0, 1.0], [64, 6.0, 2.0],   // gut' Nacht
+        [62, 8.0, 1.0], [64, 9.0, 1.0], [65, 10.0, 2.0],  // mit Ro-sen
+        [64, 12.0, 1.0], [62, 13.0, 1.0], [60, 14.0, 3.0]  // be-dacht
+      ];
+
+      function midiToFreq(note) {
+        return 440 * Math.pow(2, (note - 69) / 12);
+      }
+
+      let audioCtx = null;
+
+      function ensureAudioCtx() {
+        if (!audioCtx) {
+          const AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) return null;
+          audioCtx = new AC();
+        }
+        if (audioCtx.state === "suspended") audioCtx.resume();
+        return audioCtx;
+      }
+
+      function playLullaby(volume) {
+        const ctxA = ensureAudioCtx();
+        if (!ctxA) return;
+        if (ringMaster) { try { ringMaster.disconnect(); } catch { /* egal */ } }
+        ringNodes = [];
+        ringMaster = ctxA.createGain();
+        ringMaster.gain.value = volume;
+        ringMaster.connect(ctxA.destination);
+        const beat = 0.42;             // Dauer eines Schlags (Sekunden) – ruhig
+        const t0 = ctxA.currentTime + 0.05;
+        for (const [note, start, len] of LULLABY) {
+          const t = t0 + start * beat;
+          const dur = len * beat;
+
+          const osc = ctxA.createOscillator();
+          osc.type = "sine";
+          osc.frequency.value = midiToFreq(note);
+
+          const overtone = ctxA.createOscillator();
+          overtone.type = "sine";
+          overtone.frequency.value = midiToFreq(note) * 4;
+
+          const gain = ctxA.createGain();
+          const gainOver = ctxA.createGain();
+
+          gain.gain.setValueAtTime(0.0001, t);
+          gain.gain.exponentialRampToValueAtTime(0.5, t + 0.02);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t + dur * 1.6);
+          gainOver.gain.value = 0.06;
+
+          osc.connect(gain).connect(ringMaster);
+          overtone.connect(gainOver).connect(ringMaster);
+
+          osc.start(t); osc.stop(t + dur * 1.7);
+          overtone.start(t); overtone.stop(t + dur * 1.7);
+          ringNodes.push(osc, overtone);
+        }
+      }
+
+      function playReminderSound() {
+        const vol = reminder.volume;
+        if (reminder.tone === "custom" && reminder.customData) {
+          try {
+            if (customAudio) { customAudio.pause(); customAudio = null; }
+            customAudio = new Audio(reminder.customData);
+            customAudio.volume = vol;
+            customAudio.play().catch(() => {});
+          } catch { /* ignorieren */ }
+        } else {
+          playLullaby(vol);
+        }
+        try {
+          if (navigator.vibrate) navigator.vibrate([300, 200, 300]);
+        } catch { /* ignorieren */ }
+      }
+
+      /* --- Alarm-Schleife: klingelt bis zum Quittieren --- */
+
+      function startAlarm() {
+        undim();
+        ensureAudioCtx();
+        playReminderSound();
+        alarmRinging = true;
+        if (alarmLoopTimer) clearInterval(alarmLoopTimer);
+        // Wiegenlied dauert ca. 8–9 s → alle 11 s erneut erklingen lassen
+        alarmLoopTimer = setInterval(() => {
+          if (alarmRinging) playReminderSound();
+        }, 11000);
+      }
+
+      function stopAllSound() {
+        for (const node of ringNodes) {
+          try { node.stop(); } catch { /* bereits gestoppt */ }
+        }
+        ringNodes = [];
+        if (ringMaster) {
+          try {
+            ringMaster.gain.cancelScheduledValues(audioCtx.currentTime);
+            ringMaster.gain.setValueAtTime(0.0001, audioCtx.currentTime);
+            ringMaster.disconnect();
+          } catch { /* egal */ }
+          ringMaster = null;
+        }
+        if (customAudio) { customAudio.pause(); customAudio = null; }
+        try { if (navigator.vibrate) navigator.vibrate(0); } catch { /* egal */ }
+      }
+
+      function stopAlarm() {
+        alarmRinging = false;
+        if (alarmLoopTimer) { clearInterval(alarmLoopTimer); alarmLoopTimer = null; }
+        stopAllSound();
+      }
+
+      /* --- v23: Wach-Modus (Screen Wake Lock) + Abdunkeln --- */
+
+      function wakeSupported() {
+        return "wakeLock" in navigator;
+      }
+
+      function wakeWanted(now) {
+        // Nur wenn Erinnerung aktiviert UND wir uns im relevanten
+        // Zeitrahmen befinden (ohne Rahmen: immer, solange aktiv).
+        return reminder.enabled && reminder.wakeOn &&
+               (reminder.mode !== "interval" || !reminder.frameOn || inRemFrame(now));
+      }
+
+      async function requestWakeLock() {
+        if (!wakeSupported()) { wakeDenied = true; return; }
+        try {
+          wakeLock = await navigator.wakeLock.request("screen");
+          wakeDenied = false;
+          $("remWakeStatus").textContent =
+            "Wach-Modus aktiv – der Bildschirm bleibt an, solange die Erinnerung im Rahmen liegt.";
+          wakeLock.addEventListener("release", () => {
+            if (wakeLock) { wakeLock = null; updateWakeLock(); }
+          });
+        } catch (error) {
+          // ABGELEHNT vom Nutzer oder vom System (z. B. Energiesparmodus)
+          wakeDenied = true;
+          wakeRetryAt = Date.now() + 5 * 60 * 1000;   // erst später erneut versuchen
+          if (error && error.name === "NotAllowedError") {
+            $("remWakeStatus").textContent =
+              "Wach-Modus wurde abgelehnt (Browser-Frage mit „Zulassen“ beantworten oder Energiesparmodus prüfen). Bei ausgeschaltetem Bildschirm klingelt die Erinnerung erst nach dem Aufwecken.";
+          } else {
+            $("remWakeStatus").textContent =
+              "Wach-Modus derzeit nicht möglich (" + (error?.name || "Fehler") + ").";
+          }
+        }
+      }
+
+      function releaseWakeLock() {
+        if (wakeLock) {
+          try { wakeLock.release(); } catch { /* ignorieren */ }
+          wakeLock = null;
+        }
+      }
+
+      // Zentrale Schaltstelle: hält Lock, wenn gewünscht, gibt ihn frei, wenn nicht
+      function updateWakeLock() {
+        if (document.visibilityState !== "visible") return;
+        if (wakeWanted(new Date())) {
+          if (!wakeLock && !wakeDenied && Date.now() >= wakeRetryAt) requestWakeLock();
+        } else {
+          releaseWakeLock();
+          $("remWakeStatus").textContent = wakeSupported()
+            ? "Wach-Modus aktuell ausserhalb des Erinnerungs-Zeitrahmens (spart Akku)."
+            : "Dieser Browser unterstützt den Wach-Modus leider nicht.";
+        }
+      }
+
+      /* --- Abdunkeln nach Untätigkeit (nur im Wach-Modus) --- */
+
+      function wakeActiveDimming() {
+        return wakeLock !== null || (wakeWanted(new Date()) && wakeSupported() && !wakeDenied);
+      }
+
+      function undim() {
+        lastInteraction = Date.now();
+        document.body.classList.remove("screen-dim");
+        dimGuardOff();
+      }
+
+      // v24: Abgedunkelter Zustand – erste Berührung hellt NUR auf.
+      // Entscheidend: Der "click", der am Ende derselben Touch-Geste ankommt,
+      // muss ebenfalls geschluckt werden (bis dahin ist die Seite schon
+      // wieder hell) – genau das war der Grund für die aktivierten Buttons.
+      const shield = $("dimShield");
+
+      function isDimmed() {
+        return document.body.classList.contains("screen-dim");
+      }
+      function dimGuardOn() { if (shield) shield.hidden = false; }
+      function dimGuardOff() { if (shield) shield.hidden = true; }
+
+      let wokeFromDimAt = 0;   // Zeitpunkt des Aufhellens aus dem Dunkelzustand
+
+      function dimIntercept(event) {
+        if (isDimmed()) {
+          wokeFromDimAt = Date.now();
+          event.preventDefault();
+          event.stopPropagation();
+          undim();
+          return;
+        }
+        // Rest-Klicks einer Geste, die im Dunkelzustand begann, verwerfen
+        if (event.type === "click" && Date.now() - wokeFromDimAt < 500) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }
+
+      // Capture-Phase: läuft VOR allen Listenern der App-Elemente
+      ["pointerdown", "pointermove", "touchstart", "click", "keydown"]
+        .forEach(evt => window.addEventListener(evt, dimIntercept, { capture: true }));
+
+      // v24: Wischen/Scrollen zählt als Aktivität und hält die Seite hell
+      ["touchmove", "wheel", "scroll"].forEach(evt =>
+        window.addEventListener(evt, () => {
+          if (!isDimmed()) lastInteraction = Date.now();
+        }, { capture: true, passive: true }));
+
+      shield.addEventListener("pointerdown", dimIntercept);
+
+      // v24: Vollbild beim Scharfstellen des Wach-Modus
+      // (Android Chrome/Firefox; iOS Safari unterstützt das nicht)
+      function enterWakeFullscreen() {
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        }
+      }
+      function dimCheck(now) {
+        if (!wakeActiveDimming() || document.visibilityState !== "visible") return;
+        if (now - lastInteraction >= DIM_DELAY_MS && !alarmRinging) {
+          document.body.classList.add("screen-dim");
+          dimGuardOn();
+        } else {
+          document.body.classList.remove("screen-dim");
+          dimGuardOff();
+        }
+      }
+
+      // Sichtbarkeitswechsel: Sperren/Wiederkehren + Lock-Neuaufbau
+      document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "hidden") {
+          // Merken, ob wir im scharfgestellten Zeitraum gesperrt wurden
+          wasHiddenWhileArmed = wakeWanted(new Date());
+          releaseWakeLock();
+          document.body.classList.remove("screen-dim");
+          dimGuardOff();
+        } else {
+          lastInteraction = Date.now();
+          if (wasHiddenWhileArmed && reminder.enabled) {
+            // Fällige Erinnerung wird von checkReminder nachgeholt;
+            // kurzer Hinweis, warum es evtl. nicht vorher klingelte
+            const banner = $("reminderBanner");
+            if (!alarmRinging) {
+              banner.hidden = false;
+              banner.classList.remove("rem-fired");
+              banner.textContent = "🔓 Bildschirm war gesperrt – fällige Erinnerung wurde ggf. verzögert.";
+            }
+          }
+          wasHiddenWhileArmed = false;
+          wakeRetryAt = 0;
+          wakeDenied = false;      // nach Rückkehr darf erneut gefragt werden
+          updateWakeLock();
+        }
+      });
+
+      /* --- Zeit-Hilfen für die Erinnerung --- */
+
+      function minutesOfDay(d) {
+        return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60;
+      }
+
+      function inRemFrame(now) {
+        if (!reminder.frameOn) return true;
+        return inMinuteWindow(minutesOfDay(now), reminder.frameStart, reminder.frameEnd);
+      }
+
+      function lastFeedEnd(session) {
+        let latest = 0;
+        for (const e of entries(session)) {
+          if (e.end !== null && e.end > latest) latest = e.end;
+        }
+        return latest;
+      }
+
+      function intervalAnchor(session) {
+        const end = lastFeedEnd(session);
+        return end > 0 ? end : session.startedAt;
+      }
+
+      /* Berechnet (je nach Modus) den nächsten Auslöse-Zeitpunkt + Kennung.
+         Gibt null zurück, wenn gerade keine Erinnerung ansteht/paussiert. */
+      function computeNextFire(now) {
+        if (!reminder.enabled) return null;
+
+        if (reminder.mode === "manual") {
+          if (reminder.manualUntil > now) {
+            return { at: reminder.manualUntil, key: "manual", label: "manueller Countdown" };
+          }
+          return null;
+        }
+
+        if (reminder.mode === "fixed") {
+          let best = null;
+          for (const t of reminder.times) {
+            const m = minutesOf(t);
+            if (m === null) continue;
+            const at = new Date(now);
+            at.setHours(Math.floor(m / 60), m % 60, 0, 0);
+            if (at.getTime() <= now.getTime()) at.setDate(at.getDate() + 1);
+            if (!best || at.getTime() < best.at) {
+              best = { at: at.getTime(), key: "fixed-" + t, label: t + " Uhr" };
+            }
+          }
+          return best;
+        }
+
+        // Modus "interval": Anker = Ende der letzten Stillzeit der aktiven Reihe
+        const session = activeSeries();
+        if (!session) return null;
+        if (activeFeed()) return null;  // während des Stillens pausiert die Erinnerung
+
+        const anchor = intervalAnchor(session);
+        const step = reminder.intervalMin * 60 * 1000;
+        let target = anchor + step;
+        if (target <= now) target = now;   // fällig → sofort (Aufrufer behandelt)
+
+        // Zeitrahmen: Ziel außerhalb des Rahmens → auf Rahmenbeginn verschieben
+        if (!inRemFrame(new Date(target))) {
+          const fs = minutesOf(reminder.frameStart);
+          const shifted = new Date(target);
+          shifted.setHours(Math.floor(fs / 60), fs % 60, 0, 0);
+          if (shifted.getTime() <= target) shifted.setDate(shifted.getDate() + 1);
+          target = shifted.getTime();
+        }
+
+        return {
+          at: target,
+          key: "interval-" + Math.round((anchor + step) / 1000),
+          label: fmtDurationLong(target - now) + " bis Erinnerung"
+        };
+      }
+
+      function checkReminder(now) {
+        if (!reminder.enabled) return;
+
+        // Manueller Countdown: einmalig, dann zurück auf bereit
+        if (reminder.mode === "manual" && reminder.manualUntil > 0 && reminder.manualUntil <= now) {
+          if (lastFiredSlot !== "manual-" + reminder.manualUntil) {
+            lastFiredSlot = "manual-" + reminder.manualUntil;
+            lastFiredAt = now;
+            reminder.manualUntil = 0;
+            startAlarm();
+            scheduleSave();
+          }
+          return;
+        }
+
+        // Feste Uhrzeiten
+        if (reminder.mode === "fixed") {
+          const d = new Date(now);
+          const nowMin = Math.floor(minutesOfDay(d));
+          for (const t of reminder.times) {
+            const m = minutesOf(t);
+            if (m === null) continue;
+            if (m === nowMin) {
+              const key = "fixed-" + d.toDateString() + "-" + t;
+              if (lastFiredSlot !== key) {
+                lastFiredSlot = key;
+                lastFiredAt = now;
+                startAlarm();
+              }
+            }
+          }
+          return;
+        }
+
+        // Intervall-Modus
+        if (reminder.mode === "interval") {
+          const next = computeNextFire(now);
+          if (next && next.at <= now && next.key !== lastFiredSlot && inRemFrame(new Date(now))) {
+            lastFiredSlot = next.key;
+            lastFiredAt = now;
+            startAlarm();
+          }
+        }
+      }
+
+      /* --- UI der Erinnerung --- */
+
+      function syncReminderUI() {
+        $("remEnabled").checked = reminder.enabled;
+        $("remSettings").hidden = !reminder.enabled;
+        $("remMode").value = reminder.mode;
+        $("remFixedRows").hidden = reminder.mode !== "fixed";
+        $("remIntervalRows").hidden = reminder.mode !== "interval";
+        $("remManualRows").hidden = reminder.mode !== "manual";
+        $("remFrameOn").checked = reminder.frameOn;
+        $("remFrameRows").hidden = !reminder.frameOn || reminder.mode !== "interval";
+        $("remFrameStart").value = reminder.frameStart;
+        $("remFrameEnd").value = reminder.frameEnd;
+        $("remIntervalMin").value = reminder.intervalMin;
+        $("remManualMin").value = reminder.manualMin;
+        $("remTone").value = reminder.tone;
+        $("remCustomRows").hidden = reminder.tone !== "custom";
+        $("remCustomName").textContent = reminder.customName
+          ? reminder.customName
+          : "noch kein eigener Ton geladen";
+        $("remVolume").value = Math.round(reminder.volume * 100);
+        $("remWakeOn").checked = reminder.wakeOn;
+        $("remManualBar").hidden = !(reminder.enabled && reminder.mode === "manual");
+        $("remManualMinTop").value = reminder.manualMin;
+        updateWakeLock();
+        renderRemTimes();
+      }
+
+      function renderRemTimes() {
+        const host = $("remTimesList");
+        host.innerHTML = reminder.times.length
+          ? reminder.times.slice().sort().map(t =>
+              `<div class="rem-list-row"><span>🔔 ${t} Uhr</span>` +
+              `<button class="delete-button" type="button" data-rem-time="${t}">Entfernen</button></div>`
+            ).join("")
+          : '<div class="rem-inline-note">Noch keine Uhrzeiten eingetragen.</div>';
+
+        host.querySelectorAll("[data-rem-time]").forEach(btn => {
+          btn.addEventListener("click", () => {
+            reminder.times = reminder.times.filter(t => t !== btn.dataset.remTime);
+            renderRemTimes();
+            scheduleSave();
+          });
+        });
+      }
+
+      /* ================= ENDE TEIL 1 =================
+         Nächste erwartete Zeile in Teil 2:
+         $("remEnabled").addEventListener("change", ...
+      */
+
+           $("remEnabled").addEventListener("change", () => {
+        reminder.enabled = $("remEnabled").checked;
+        syncReminderUI();
+        scheduleSave();
+        if (reminder.enabled) $("reminderHowtoDialog").showModal();
+      });
+
+      $("remHowto").addEventListener("click", () => $("reminderHowtoDialog").showModal());
+      $("reminderHowtoClose").addEventListener("click", () => $("reminderHowtoDialog").close());
+      $("reminderHowtoDialog").addEventListener("click", e => {
+        if (e.target === $("reminderHowtoDialog")) $("reminderHowtoDialog").close();
+      });
+
+      $("remMode").addEventListener("change", () => {
+        reminder.mode = $("remMode").value;
+        lastFiredSlot = "";
+        syncReminderUI();
+        scheduleSave();
+      });
+
+      $("remAddTime").addEventListener("click", () => {
+        const t = $("remNewTime").value;
+        if (!t || reminder.times.includes(t)) return;
+        if (reminder.times.length >= 24) return;
+        reminder.times.push(t);
+        renderRemTimes();
+        scheduleSave();
+      });
+
+      $("remIntervalMin").addEventListener("change", () => {
+        let v = Math.round(Number($("remIntervalMin").value));
+        if (!Number.isFinite(v)) v = 180;
+        reminder.intervalMin = Math.min(720, Math.max(1, v));
+        $("remIntervalMin").value = reminder.intervalMin;
+        reminder.manualMin = reminder.intervalMin;   // Default des manuellen Countdowns
+        $("remManualMin").value = reminder.manualMin;
+        lastFiredSlot = "";
+        scheduleSave();
+      });
+
+      $("remFrameOn").addEventListener("change", () => {
+        reminder.frameOn = $("remFrameOn").checked;
+        $("remFrameRows").hidden = !reminder.frameOn;
+        lastFiredSlot = "";
+        updateWakeLock();      // Zeitrahmen ändert auch, wann gewachst wird
+        scheduleSave();
+      });
+
+      $("remFrameStart").addEventListener("change", () => {
+        reminder.frameStart = $("remFrameStart").value;
+        lastFiredSlot = "";
+        updateWakeLock();
+        scheduleSave();
+      });
+      $("remFrameEnd").addEventListener("change", () => {
+        reminder.frameEnd = $("remFrameEnd").value;
+        lastFiredSlot = "";
+        updateWakeLock();
+        scheduleSave();
+      });
+      $("remManualStartTop").addEventListener("click", () => {
+        $("remManualMin").value = $("remManualMinTop").value;
+        $("remManualStart").click();
+      });
+      $("remManualMinTop").addEventListener("change", () => {
+        $("remManualMin").value = $("remManualMinTop").value;
+      });
+      $("remManualStart").addEventListener("click", () => {
+        if (wakeActiveDimming()) enterWakeFullscreen();
+        let v = Math.round(Number($("remManualMin").value));
+        if (!Number.isFinite(v)) v = reminder.manualMin;
+        v = Math.min(720, Math.max(1, v));
+        reminder.manualMin = v;
+        $("remManualMin").value = v;
+        reminder.manualUntil = Date.now() + v * 60 * 1000;
+        lastFiredSlot = "";
+        ensureAudioCtx();          // Mobile: Audio durch Nutzerinteraktion entsperren
+        undim();
+        scheduleSave();
+      });
+
+      $("remWakeOn").addEventListener("change", () => {
+        reminder.wakeOn = $("remWakeOn").checked;
+        if (!reminder.wakeOn) {
+          releaseWakeLock();
+          document.body.classList.remove("screen-dim");
+          $("remWakeStatus").textContent = "Wach-Modus ausgeschaltet.";
+        } else {
+          wakeDenied = false;
+          wakeRetryAt = 0;
+          updateWakeLock();
+        }
+        scheduleSave();
+      });
+
+      $("remTone").addEventListener("change", () => {
+        reminder.tone = $("remTone").value;
+        syncReminderUI();
+        scheduleSave();
+        if (reminder.tone === "custom" && !reminder.customData) {
+          alert("Noch kein eigener Ton vorhanden – bitte zunächst über „Ton auswählen …“ eine Audiodatei laden.");
+        }
+      });
+
+      $("remPickTone").addEventListener("click", () => $("remToneFile").click());
+
+      $("remToneFile").addEventListener("change", event => {
+        const file = event.target.files && event.target.files[0];
+        event.target.value = "";
+        if (!file) return;
+
+        if (file.size > REM_MAX_TONE_BYTES) {
+          alert("Diese Datei ist zu groß (" + Math.round(file.size / 1024) + " KB). " +
+                "Bitte eine kürzere Audiodatei von maximal ca. 2 MB wählen.");
+          return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            reminder.customData = reader.result;
+            reminder.customName = file.name;
+            reminder.tone = "custom";
+            syncReminderUI();
+            scheduleSave();
+            alert("Eigener Klingelton gespeichert: " + file.name);
+          } catch (error) {
+            alert("Der Ton konnte nicht gespeichert werden – vermutlich reicht der " +
+                  "Browser-Speicher nicht aus. Bitte eine kleinere Datei wählen.");
+            reminder.customData = "";
+            reminder.customName = "";
+            reminder.tone = "default";
+            syncReminderUI();
+          }
+        };
+        reader.readAsDataURL(file);
+      });
+
+      $("remVolume").addEventListener("input", () => {
+        reminder.volume = Math.min(1, Math.max(0, Number($("remVolume").value) / 100));
+      });
+      $("remVolume").addEventListener("change", () => scheduleSave());
+
+      $("remTest").addEventListener("click", () => {
+        if (testTimer) {
+          // Test läuft bereits → erneut antippen beendet ihn
+          clearTimeout(testTimer);
+          testTimer = null;
+          stopAllSound(); 
+          $("remTest").textContent = "Test ▶";
+          return;
+        }
+        ensureAudioCtx();          // Mobile: Wiedergabe braucht Nutzerinteraktion
+        undim();
+        playReminderSound();
+        $("remTest").textContent = "Test ■";
+        // Nach spätestens 11 s (Wiegenlied-Ende) automatisch aufräumen
+        testTimer = setTimeout(() => {
+          testTimer = null;
+          stopAllSound(); 
+          $("remTest").textContent = "Test ▶";
+        }, 11000);
+      });
+
+      /* --- Erinnerungs-Banner im Hauptbereich (auch Alarm-Quittierung) --- */
+
+      function renderReminderBanner(now) {
+        const box = $("reminderBanner");
+        if (!reminder.enabled) { box.hidden = true; return; }
+
+        if (alarmRinging) {
+          box.hidden = false;
+          box.classList.add("rem-fired");
+          box.textContent = "🔔 Erinnerung! Antippen zum Quittieren";
+          return;
+        }
+
+        const next = computeNextFire(new Date(now));
+
+        if (!next) {
+          box.hidden = false;
+          box.classList.remove("rem-fired");
+          if (reminder.mode === "manual") {
+            box.textContent = "🔔 Erinnerung bereit – Countdown starten";
+          } else if (reminder.mode === "interval" && activeFeed()) {
+            box.textContent = "🔔 Erinnerung pausiert (Stillzeit läuft)";
+          } else {
+            box.textContent = "🔔 Erinnerung bereit";
+          }
+          return;
+        }
+
+        box.hidden = false;
+        box.classList.remove("rem-fired");
+        const restMs = next.at - now;
+        if (reminder.mode === "fixed") {
+          box.textContent = "🔔 Nächste Erinnerung: " + next.label +
+            " (in " + fmtDurationLong(restMs) + ")";
+        } else if (reminder.mode === "interval") {
+          box.textContent = "🔔 Nächste Erinnerung in " + fmtDurationLong(restMs);
+        } else {
+          box.textContent = "🔔 Manueller Countdown: " + fmtDurationLong(restMs);
+        }
+      }
+
+      $("reminderBanner").addEventListener("click", () => {
+        if (alarmRinging) {
+          stopAlarm();
+          undim();
+        }
+      });
+
       /* ============ Kernlogik ============ */
 
       function setSide(side) {
+        if (alarmRinging) stopAlarm();
+        undim();
+
         const session = activeSeries();
         if (session && isCurrentView()) {
           const active = activeFeed();
           if (active && active.side !== side) {
             active.end = Date.now();
             session.entries.push({ side, start: Date.now(), end: null });
+            // neues Stillen setzt den Intervall-Timer zurück
+            lastFiredSlot = "";
           }
         }
 
@@ -970,6 +1958,10 @@
       }
 
       function toggleFeed() {
+        if (wakeActiveDimming()) enterWakeFullscreen();
+        if (alarmRinging) stopAlarm();
+        undim();
+
         const session = activeSeries();
         if (!session || !isCurrentView()) return;
 
@@ -980,8 +1972,11 @@
             currentSide = active.side === "left" ? "right" : "left";
           }
           $("feedDetails").open = true;
+          // Ende der Stillzeit = neuer Anker für den Intervall-Timer
+          lastFiredSlot = "";
         } else {
           session.entries.push({ side: currentSide, start: Date.now(), end: null });
+          lastFiredSlot = "";
         }
 
         updateControls();
@@ -1066,7 +2061,7 @@
           <strong><i class="dot" style="background:rgba(255,255,255,.85)"></i>Zuletzt: ${last.side === "left" ? "Links" : "Rechts"}</strong>
           ${dayLabel(last.end)} · ${timeOfDay(last.end)} Uhr<br>
           Dauer: ${fmt(last.end - last.start)} <span style="opacity:.75">(${agoText(last.end, now)})</span>
-          ${last.note ? `<div class="feed-note">📝 ${escapeHtml(last.note)}</div>` : `<div style="opacity:.7;font-size:.78rem;margin-top:4px">Antippen für Notiz</div>`}
+          ${last.note ? `<div class="feed-note">📝 ${escapeHtml(last.note)}</div>` : `<div style="opacity:.7;font-size:.78rem;margin-top:4px">antippen für Notiz</div>`}
         `;
       }
 
@@ -1075,7 +2070,6 @@
       const graph = $("feedGraph");
       const gctx = graph.getContext("2d");
 
-      // v21: Canvas-Farben aus dem aktuellen Theme lesen
       function themeColors() {
         const cs = getComputedStyle(document.documentElement);
         const get = (name, fallback) => cs.getPropertyValue(name).trim() || fallback;
@@ -1424,6 +2418,7 @@
             const session = activeSeries();
             if (!session) return;
             session.entries = session.entries.filter(e => e.start !== start);
+            lastFiredSlot = "";   // Anker kann sich ändern
             scheduleSave();
             renderFeed(Date.now());
           });
@@ -1483,6 +2478,7 @@
             session.finished = false;
             currentId = session.id;
             selectedId = session.id;
+            lastFiredSlot = "";
             hideTapDetail();
             applyViewState(session);
             scheduleSave();
@@ -1519,6 +2515,7 @@
         }
         if (selectedId === id) selectedId = currentId;
 
+        lastFiredSlot = "";
         hideTapDetail();
         applyViewState(activeSeries());
         scheduleSave();
@@ -1572,6 +2569,7 @@
         }
         session.finished = true;
         session.endedAt = now;
+        lastFiredSlot = "";
         scheduleSave();
         renderFeed(now);
       });
@@ -1593,6 +2591,7 @@
         series.push(fresh);
         currentId = fresh.id;
         selectedId = fresh.id;
+        lastFiredSlot = "";
         hideTapDetail();
         applyViewState(fresh);
         scheduleSave();
@@ -1608,7 +2607,7 @@
             app: "still-tracker",
             version: 3,
             exportedAt: new Date().toISOString(),
-            currentSide, autoSwitch, theme,
+            currentSide, autoSwitch, theme, reminder,
             series, currentId
           };
           const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
@@ -1652,6 +2651,15 @@
             autoSwitch = data.autoSwitch === "off" ? "off" : "on";
             theme = { mode: "manual", dark: false, start: "20:00", end: "07:00" };
             loadTheme(data.theme);
+            reminder = {
+              enabled: false, mode: "interval",
+              times: ["02:00", "06:00"], intervalMin: 180,
+              frameOn: false, frameStart: "22:00", frameEnd: "06:00",
+              manualMin: 180, manualUntil: 0,
+              volume: 0.6, tone: "default", customName: "", customData: "",
+              wakeOn: true
+            };
+            loadReminder(data.reminder);
 
             const norm = normalizeSessions(data.series, data.currentId);
             series = norm.sessions;
@@ -1670,7 +2678,11 @@
             $("themeEnd").value = theme.end;
             $("themeWindowRow").hidden = theme.mode !== "window";
             applyTheme(true);
+            syncReminderUI();
 
+            lastFiredSlot = "";
+            customAudio = null;
+            stopAlarm();
             hideTapDetail();
             applyViewState(activeSeries());
             scheduleSave();
@@ -1694,10 +2706,11 @@
 
       /* ============ Sofortspeichern beim Schließen/Verbergen ============ */
 
-      document.addEventListener("visibilitychange", () => {
-        if (document.visibilityState === "hidden") persistState();
+      window.addEventListener("pagehide", () => {
+        releaseWakeLock();
+        document.body.classList.remove("screen-dim");
+        persistState();
       });
-      window.addEventListener("pagehide", persistState);
       window.addEventListener("beforeunload", persistState);
 
       /* ============ Start ============ */
@@ -1709,11 +2722,15 @@
         renderStats(now);
         renderFeedList();
         renderHistory();
+        renderReminderBanner(now);
       }
 
       loadAll();
+      applyTheme(false);
       resizeGraph();
       renderFeed(Date.now());
+      checkReminder(Date.now());
+      updateWakeLock();
 
       window.addEventListener("resize", () => {
         resizeGraph();
@@ -1721,11 +2738,16 @@
       });
 
       window.setInterval(() => {
-        renderFeed(Date.now());
-        // v21: Zeitfenster- und OS-Modus laufend prüfen
+        const now = Date.now();
+        renderFeed(now);
+        checkReminder(now);
+        dimCheck(now);
+        updateWakeLock();
+
+        // Zeitfenster- und OS-Modus laufend prüfen
         if (theme.mode !== "manual") {
           const dark = document.documentElement.getAttribute("data-theme") === "dark";
-          const wantDark = themeShouldBeDark(new Date());
+          const wantDark = themeShouldBeDark(new Date(now));
           if (dark !== wantDark) applyTheme(true);
         }
       }, 500);
