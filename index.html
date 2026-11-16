@@ -2764,11 +2764,11 @@
                 Object.assign(batteryBanner.style, {
                   position: "sticky", top: "0", zIndex: "9998",
                   margin: "0", padding: "10px 16px",
-                  background: "#fff3d6", color: "#7a5a10",
+                  background: "#efe2cc", color: "#6b4e0d",
                   fontSize: ".85rem", lineHeight: "1.5",
-                  borderBottom: "2px solid #d9a441"
+                  borderBottom: "2px solid #bfa878"
                 });
-                document.body.prepend(batteryBanner);
+                $("wakeMain").prepend(batteryBanner);
               }
               batteryBanner.hidden = false;
               batteryBanner.textContent =
